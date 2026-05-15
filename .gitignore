@@ -1,6 +1,17 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
 .DS_Store
 coverage/
 .next
+.vercel/
+.turbo/
+.eslintcache
+out/
+build/
+.idea/
+*.log
+.vscode/
+.idea/
