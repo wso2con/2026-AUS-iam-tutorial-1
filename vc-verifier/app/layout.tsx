@@ -3,7 +3,11 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'SkyLink Lounge Access',
-  description: 'SkyLink lounge access verification demo'
+  description: 'SkyLink lounge access verification demo',
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/favicon.svg'
+  }
 };
 
 export default function RootLayout({

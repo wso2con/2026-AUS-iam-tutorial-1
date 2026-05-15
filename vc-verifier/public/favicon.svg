@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background -->
+  <rect width="64" height="64" fill="#050505"/>
+  
+  <!-- Circular badge background -->
+  <circle cx="32" cy="32" r="28" fill="rgba(82, 215, 148, 0.12)" stroke="#52d794" stroke-width="1.5"/>
+  
+  <!-- Inner circle accent -->
+  <circle cx="32" cy="32" r="24" fill="none" stroke="rgba(82, 215, 148, 0.2)" stroke-width="0.5"/>
+  
+  <!-- Plane icon -->
+  <g transform="translate(32, 20)">
+    <!-- Main plane body -->
+    <path d="M0 0L12 -8L6 10L-6 10Z" fill="#52d794" stroke="#52d794" stroke-width="0.5" stroke-linejoin="round"/>
+    <!-- Wing indicator -->
+    <path d="M-8 2L8 2" stroke="#52d794" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+  </g>
+  
+  <!-- SkyLink text -->
+  <text x="32" y="50" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#52d794" text-anchor="middle" letter-spacing="0.5">SKYLINK</text>
+</svg>
