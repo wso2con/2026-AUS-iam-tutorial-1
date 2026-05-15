@@ -516,6 +516,35 @@ button {
   line-height: 1.45;
 }
 
+.verification-details {
+  margin: 24px 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(82, 215, 148, 0.08);
+  border: 1px solid rgba(82, 215, 148, 0.2);
+  text-align: left;
+}
+
+.verification-details p {
+  margin: 8px 0;
+  color: var(--white);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.verification-details p:first-child {
+  margin-top: 0;
+}
+
+.verification-details p:last-child {
+  margin-bottom: 0;
+}
+
+.verification-details strong {
+  color: var(--green);
+  font-weight: 600;
+}
+
 .manifest-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -51,6 +51,18 @@ function formatClock(date: Date) {
   return `${hh}:${mm}:${ss}`;
 }
 
+function formatDateOnly(dateString: unknown): string {
+  if (typeof dateString !== 'string') {
+    return String(dateString);
+  }
+  try {
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  } catch {
+    return dateString;
+  }
+}
+
 function formatExpiry(expiresAtMs: number | null) {
   if (!expiresAtMs) {
     return '--:--';
@@ -74,6 +86,7 @@ export default function Home() {
   const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null);
   const [expiryText, setExpiryText] = useState('--:--');
   const [isCreating, setIsCreating] = useState(false);
+  const [verificationClaims, setVerificationClaims] = useState<Record<string, unknown> | null>(null);
   const pollHandle = useRef<ReturnType<typeof setInterval> | null>(null);
   const finalTransitionHandle = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -117,6 +130,7 @@ export default function Home() {
     setQrDataUrl('');
     setExpiry();
     setIsCreating(false);
+    setVerificationClaims(null);
   };
 
   const showVerifiedAfterValidation = () => {
@@ -142,6 +156,9 @@ export default function Home() {
     }
 
     if (statusPayload.status === 'VERIFIED') {
+      if (statusPayload.verificationResult?.claims) {
+        setVerificationClaims(statusPayload.verificationResult.claims);
+      }
       showVerifiedAfterValidation();
       return true;
     }
@@ -326,6 +343,16 @@ export default function Home() {
                   <div className="access-success-mark"><PlaneIcon /></div>
                   <div className="field-label">Access Status</div>
                   <h2>Lounge Access Verified</h2>
+                  {verificationClaims && (
+                    <div className="verification-details">
+                      {verificationClaims.userid && (
+                        <p><strong>MEMBERSHIP NO:</strong> {String(verificationClaims.userid)}</p>
+                      )}
+                      {verificationClaims.member_since && (
+                        <p><strong>MEMBER SINCE:</strong> {formatDateOnly(verificationClaims.member_since)}</p>
+                      )}
+                    </div>
+                  )}
                   <p>You may proceed to the lounge.</p>
                 </div>
               </div>
