@@ -332,12 +332,12 @@ Since we are using that agent as a background agent as well, need to enable CIBA
 - Click SMS and Email as Allowed Notification Delivery Methods
 - Click on Update button
 
-## Setup the application
+## Setup the applications
 
 Follow README.md files in:
 
-    - asgardeo-b2c-sample-app/frontend
-    - asgardeo-b2c-sample-app/api
-    - asgardeo-b2c-sample-app/mcp
-    - asgardeo-b2c-sample-app/ai-agent
-    - vc-verifier/
+- [asgardeo-b2c-sample-app/frontend/README.md](asgardeo-b2c-sample-app/frontend/README.md)
+- [asgardeo-b2c-sample-app/api/README.md](asgardeo-b2c-sample-app/api/README.md)
+- [asgardeo-b2c-sample-app/mcp/README.md](asgardeo-b2c-sample-app/mcp/README.md)
+- [asgardeo-b2c-sample-app/ai-agent/README.md](asgardeo-b2c-sample-app/ai-agent/README.md)
+- [vc-verifier/README.md](vc-verifier/README.md)
