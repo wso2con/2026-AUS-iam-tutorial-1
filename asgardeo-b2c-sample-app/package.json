@@ -1,0 +1,17 @@
+{
+  "name": "asgardeo-b2c-sample-app-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev:api": "npm --prefix api run dev",
+    "dev:mcp": "npm --prefix mcp run dev",
+    "dev:agent": "npm --prefix ai-agent run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.51.1"
+  }
+}
