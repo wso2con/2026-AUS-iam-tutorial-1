@@ -24,6 +24,23 @@ const port = Number(process.env.PORT || 8787);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 const app = express();
 
+function getRequestTokenLogContext(request: any) {
+  const rawClaims = request.authenticatedUser?.rawClaims;
+
+  if (!rawClaims || typeof rawClaims !== "object") {
+    return {};
+  }
+
+  const actorClaim = rawClaims.act;
+
+  return {
+    sub: typeof rawClaims.sub === "string" ? rawClaims.sub : undefined,
+    actor: actorClaim && typeof actorClaim === "object" && typeof actorClaim.sub === "string"
+      ? actorClaim.sub
+      : undefined
+  };
+}
+
 app.use((request: any, response, next) => {
   response.setHeader("Access-Control-Allow-Origin", frontendOrigin);
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
@@ -55,6 +72,7 @@ app.use((request: any, response, next) => {
   response.setHeader("X-Request-Id", requestId);
   response.on("finish", () => {
     requestLogger.info({
+      ...getRequestTokenLogContext(request),
       statusCode: response.statusCode,
       durationMs: Number((performance.now() - startedAt).toFixed(1))
     }, "HTTP request completed");

@@ -35,12 +35,14 @@ dotenv.config({
 });
 
 const logger = createLogger();
+const defaultAgentScopes = "openid profile deal-alert-consents:write";
 
 const asgardeoConfig = {
     afterSignInUrl: process.env.REDIRECT_URI || "",
     clientId: process.env.CLIENT_ID || "",
     clientSecret: process.env.CLIENT_SECRET || "",
     baseUrl: process.env.ASGARDEO_BASE_URL || "",
+    scopes: process.env.AGENT_SCOPES?.trim() || defaultAgentScopes,
 };
 
 const agentConfig = {
@@ -55,6 +57,8 @@ const model = new ChatGoogleGenerativeAI({
 
 const agentPrompt = [
     "You are Wayfinder's travel assistant.",
+    "You may search flights, hotels, trip ideas, and store better-deal monitoring consent using your own agent identity.",
+    "Do not create bookings, list a user's bookings, or read a user's profile from the general chat tool path. Those actions require a separate user approval flow.",
     "When a user asks to store offline better-deal alert consent for a flight booking, call store_deal_alert_consent with the exact bookingId, username, routeFrom, routeTo, criteria, and enabled values supplied by the user message.",
     "After storing consent, summarize the result briefly.",
     "Never show booking IDs, auth request IDs, access tokens, raw JSON, or other technical identifiers to the user.",
@@ -95,7 +99,84 @@ type AgentRuntime = {
     tools: ToolWithSchema[];
 };
 
+type OboAction =
+    | {
+        kind: "create_booking";
+        type: "flight" | "hotel";
+        itemId: string;
+        travelers: number;
+    }
+    | {
+        kind: "get_flight_bookings";
+    }
+    | {
+        kind: "get_profile";
+    };
+
+type PendingOboAuthorization = {
+    action: OboAction;
+    client: AsgardeoJavaScriptClient;
+    createdAtMs: number;
+    description: string;
+    scopes: string[];
+    socket: Duplex;
+};
+
 const TOKEN_REFRESH_SKEW_MS = 60_000;
+const OBO_PENDING_TTL_MS = Number(process.env.OBO_PENDING_TTL_MS || 5 * 60 * 1000);
+
+function getDefaultOboScopes(action: OboAction) {
+    const scopes = new Set(["openid", "profile"]);
+
+    if (action.kind === "create_booking") {
+        scopes.add("bookings:write");
+    }
+
+    if (action.kind === "get_flight_bookings") {
+        scopes.add("bookings:read");
+    }
+
+    if (action.kind === "get_profile") {
+        scopes.add("profile:read");
+    }
+
+    return [...scopes];
+}
+
+function getConfiguredOboScopes(action: OboAction) {
+    const configuredScopes = process.env.OBO_SCOPES?.split(/\s+/).map((scope) => scope.trim()).filter(Boolean);
+
+    return configuredScopes?.length ? configuredScopes : getDefaultOboScopes(action);
+}
+
+function getOboDescription(action: OboAction) {
+    if (action.kind === "create_booking") {
+        return `book this ${action.type}`;
+    }
+
+    if (action.kind === "get_flight_bookings") {
+        return "read your flight bookings";
+    }
+
+    return "read your Wayfinder profile";
+}
+
+function getOboRedirectUri(port: number, host: string) {
+    return (
+        process.env.OBO_REDIRECT_URI ||
+        process.env.AGENT_OBO_REDIRECT_URI ||
+        process.env.REDIRECT_URI ||
+        `http://${host}:${port}/oauth/callback`
+    );
+}
+
+function createOboClient(redirectUri: string, scopes: string[]) {
+    return new AsgardeoJavaScriptClient({
+        ...asgardeoConfig,
+        afterSignInUrl: redirectUri,
+        scopes,
+    });
+}
 
 function isToolNamed(tool: ToolWithSchema, name: string) {
     return tool.name === name || Boolean(tool.name?.endsWith(`_${name}`));
@@ -112,10 +193,28 @@ function decodeBase64UrlJson(value: string): Record<string, unknown> | null {
     }
 }
 
+function decodeJwtPayload(accessToken: string) {
+    const parts = accessToken.split(".");
+
+    return parts.length === 3 ? decodeBase64UrlJson(parts[1]) : null;
+}
+
+function getTokenPermissionClaims(accessToken: string) {
+    const payload = decodeJwtPayload(accessToken);
+
+    return {
+        audience: payload?.aud,
+        issuer: payload?.iss,
+        permissions: payload?.permissions,
+        roles: payload?.roles,
+        scope: payload?.scope,
+        scp: payload?.scp,
+        subject: payload?.sub,
+    };
+}
+
 function getAgentTokenExpiresAtMs(agentToken: TokenResponse) {
-    const jwtPayload = agentToken.accessToken.split(".").length === 3
-        ? decodeBase64UrlJson(agentToken.accessToken.split(".")[1])
-        : null;
+    const jwtPayload = decodeJwtPayload(agentToken.accessToken);
     const jwtExpiration = jwtPayload && typeof jwtPayload.exp === "number"
         ? jwtPayload.exp * 1000
         : 0;
@@ -437,6 +536,185 @@ async function runHardcodedConsentCommand(message: string, tools: ToolWithSchema
         : "No problem. I will not send better-deal alerts for this booking.";
 }
 
+function parseTravelerCount(message: string) {
+    const travelerMatch = message.match(/\b(\d+)\s*(?:traveler|travelers|passenger|passengers)\b/i);
+    const travelers = travelerMatch ? Number(travelerMatch[1]) : 1;
+
+    return Number.isInteger(travelers) && travelers >= 1 && travelers <= 9 ? travelers : 1;
+}
+
+function parseOboAction(message: string): OboAction | null {
+    const normalized = message.trim().toLowerCase();
+
+    if (!normalized) {
+        return null;
+    }
+
+    if (
+        /\b(my|mine)\b/.test(normalized) &&
+        /\b(profile|account)\b/.test(normalized) &&
+        /\b(show|view|get|read|check|load|open|what)\b/.test(normalized)
+    ) {
+        return { kind: "get_profile" };
+    }
+
+    if (
+        /\b(my|mine)\b/.test(normalized) &&
+        /\b(bookings|booking|flights|flight)\b/.test(normalized) &&
+        /\b(show|view|get|read|check|list|load|open)\b/.test(normalized)
+    ) {
+        return { kind: "get_flight_bookings" };
+    }
+
+    if (!/\b(book|reserve|confirm)\b/.test(normalized)) {
+        return null;
+    }
+
+    const itemMatch = normalized.match(/\b(flight|hotel)-[a-z0-9-]+\b/);
+
+    if (!itemMatch) {
+        return null;
+    }
+
+    return {
+        kind: "create_booking",
+        type: itemMatch[0].startsWith("hotel-") ? "hotel" : "flight",
+        itemId: itemMatch[0],
+        travelers: parseTravelerCount(message),
+    };
+}
+
+function getToolOrThrow(
+    tools: ToolWithSchema[],
+    toolName: string,
+): ToolWithSchema & { invoke: (input: Record<string, unknown>) => Promise<unknown> | unknown } {
+    const tool = tools.find((candidate) => isToolNamed(candidate, toolName));
+
+    if (!tool?.invoke) {
+        const availableTools = tools
+            .map((candidate) => candidate.name)
+            .filter(Boolean)
+            .join(", ");
+
+        throw new Error(`${toolName} tool is not available. Loaded tools: ${availableTools || "none"}.`);
+    }
+
+    return tool as ToolWithSchema & {
+        invoke: (input: Record<string, unknown>) => Promise<unknown> | unknown;
+    };
+}
+
+async function getDelegatedTools(accessToken: string) {
+    const client = new MultiServerMCPClient({
+        travel: {
+            transport: "http",
+            url: process.env.MCP_SERVER_URL || "http://localhost:8000/mcp",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        },
+    });
+
+    const tools = sanitizeToolSchemasForGemini(await client.getTools());
+
+    return { client, tools };
+}
+
+function summarizeBooking(action: Extract<OboAction, { kind: "create_booking" }>, result: unknown) {
+    const data = parseToolJson(result);
+    const booking = isJsonSchemaObject(data) ? data : {};
+    const reference = typeof booking.bookingReference === "string" ? booking.bookingReference : "";
+
+    if (reference) {
+        return `Done, I booked that ${action.type}. Your booking reference is ${reference}.`;
+    }
+
+    return `Done, I booked that ${action.type}.`;
+}
+
+function summarizeFlightBookings(result: unknown) {
+    const data = parseToolJson(result);
+    const bookings = isJsonSchemaObject(data) && Array.isArray(data.data) ? data.data : [];
+
+    if (bookings.length === 0) {
+        return "You do not have any flight bookings yet.";
+    }
+
+    const lines = bookings.slice(0, 3).map((booking, index) => {
+        if (!isJsonSchemaObject(booking)) {
+            return `${index + 1}. Flight booking`;
+        }
+
+        const flight = isJsonSchemaObject(booking.flight) ? booking.flight : {};
+        const route = [flight.from, flight.to].filter((value) => typeof value === "string").join(" to ");
+        const airline = typeof flight.airline === "string" ? flight.airline : "Flight";
+        const dates = typeof flight.dates === "string" ? `, ${flight.dates}` : "";
+        const status = typeof booking.status === "string" ? ` (${booking.status})` : "";
+
+        return `${index + 1}. ${airline}${route ? `, ${route}` : ""}${dates}${status}`;
+    });
+
+    const suffix = bookings.length > 3 ? `\nAnd ${bookings.length - 3} more.` : "";
+
+    return `Here are your flight bookings:\n${lines.join("\n")}${suffix}`;
+}
+
+function summarizeProfile(result: unknown) {
+    const data = parseToolJson(result);
+    const profile = isJsonSchemaObject(data) && isJsonSchemaObject(data.data) ? data.data : {};
+    const fullName = [profile.givenName, profile.familyName]
+        .filter((value) => typeof value === "string" && value.trim())
+        .join(" ");
+    const username = typeof profile.username === "string" ? profile.username : "";
+    const email = typeof profile.email === "string" ? profile.email : "";
+
+    return [
+        "Here is the Wayfinder profile I can see with your approval:",
+        fullName ? `Name: ${fullName}` : "",
+        email ? `Email: ${email}` : "",
+        !email && username ? `Username: ${username}` : "",
+    ].filter(Boolean).join("\n");
+}
+
+async function executeOboAction(accessToken: string, action: OboAction) {
+    const { client, tools } = await getDelegatedTools(accessToken);
+
+    try {
+        if (action.kind === "create_booking") {
+            const tool = getToolOrThrow(tools, "create_booking");
+            const result = await tool.invoke({
+                type: action.type,
+                itemId: action.itemId,
+                travelers: action.travelers,
+            });
+
+            return summarizeBooking(action, result);
+        }
+
+        if (action.kind === "get_flight_bookings") {
+            const tool = getToolOrThrow(tools, "get_flight_bookings");
+            const result = await tool.invoke({});
+
+            return summarizeFlightBookings(result);
+        }
+
+        const tool = getToolOrThrow(tools, "get_profile");
+        const result = await tool.invoke({});
+
+        return summarizeProfile(result);
+    } finally {
+        await client.close().catch((error: unknown) => {
+            logger.warn({ err: error }, "Failed to close OBO MCP client");
+        });
+    }
+}
+
+function getDelegatedTokenClaims(token: TokenResponse) {
+    return token.accessToken.split(".").length === 3
+        ? decodeBase64UrlJson(token.accessToken.split(".")[1])
+        : null;
+}
+
 function createWebSocketAcceptKey(key: string): string {
     return createHash("sha1")
         .update(`${key}${WEB_SOCKET_GUID}`)
@@ -660,6 +938,11 @@ async function createAgent() {
     const agentToken = await asgardeoJavaScriptClient.getAgentToken(agentConfig);
     const tokenExpiresAtMs = getAgentTokenExpiresAtMs(agentToken);
 
+    logger.info({
+        configuredScopes: asgardeoConfig.scopes,
+        tokenClaims: getTokenPermissionClaims(agentToken.accessToken),
+    }, "Received agent access token");
+
     const client = new MultiServerMCPClient({
         travel: {
             transport: "http",
@@ -693,6 +976,9 @@ async function runAgentServer() {
     let refreshPromise: Promise<AgentRuntime> | null = null;
     const port = Number(process.env.PORT || process.env.AGENT_PORT || 8790);
     const host = process.env.HOST || "localhost";
+    const oboRedirectUri = getOboRedirectUri(port, host);
+    const oboCallbackPath = new URL(oboRedirectUri).pathname || "/";
+    const pendingOboAuthorizations = new Map<string, PendingOboAuthorization>();
 
     async function refreshRuntime() {
         if (!refreshPromise) {
@@ -743,13 +1029,136 @@ async function runAgentServer() {
         }
     }
 
+    function cleanExpiredOboAuthorizations() {
+        const now = Date.now();
+
+        for (const [state, authorization] of pendingOboAuthorizations.entries()) {
+            if (now - authorization.createdAtMs > OBO_PENDING_TTL_MS) {
+                pendingOboAuthorizations.delete(state);
+            }
+        }
+    }
+
+    async function createOboAuthorization(action: OboAction, socket: Duplex) {
+        cleanExpiredOboAuthorizations();
+
+        const scopes = getConfiguredOboScopes(action);
+        const client = createOboClient(oboRedirectUri, scopes);
+        const authorizeUrl = await client.getOBOSignInURL(agentConfig);
+        const state = new URL(authorizeUrl).searchParams.get("state");
+
+        if (!state) {
+            throw new Error("Asgardeo OBO authorize URL did not include a state value.");
+        }
+
+        const description = getOboDescription(action);
+
+        pendingOboAuthorizations.set(state, {
+            action,
+            client,
+            createdAtMs: Date.now(),
+            description,
+            scopes,
+            socket,
+        });
+
+        return {
+            authorizeUrl,
+            description,
+            scopes,
+        };
+    }
+
+    async function handleOboCallback(requestUrl: URL, response: ServerResponse) {
+        cleanExpiredOboAuthorizations();
+
+        const state = requestUrl.searchParams.get("state") || "";
+        const code = requestUrl.searchParams.get("code") || "";
+        const sessionState = requestUrl.searchParams.get("session_state") || "";
+        const error = requestUrl.searchParams.get("error");
+        const errorDescription = requestUrl.searchParams.get("error_description");
+        const pendingAuthorization = state ? pendingOboAuthorizations.get(state) : null;
+
+        if (error) {
+            writeHttpJson(response, 400, {
+                error,
+                error_description: errorDescription || "The OBO authorization request was not approved.",
+            });
+
+            if (pendingAuthorization) {
+                sendJson(pendingAuthorization.socket, {
+                    type: "error",
+                    message: "I could not complete that action because the authorization request was not approved.",
+                });
+                pendingOboAuthorizations.delete(state);
+            }
+
+            return;
+        }
+
+        if (!pendingAuthorization || !code) {
+            writeHttpJson(response, 400, {
+                error: "Invalid or expired OBO authorization callback.",
+            });
+
+            return;
+        }
+
+        pendingOboAuthorizations.delete(state);
+
+        try {
+            includeClientSecretInAgentAuthorizeRequest(pendingAuthorization.client);
+            const token = await pendingAuthorization.client.getOBOToken(agentConfig, {
+                code,
+                session_state: sessionState,
+                state,
+            });
+            const claims = getDelegatedTokenClaims(token);
+            const actorSubject = isJsonSchemaObject(claims?.act) ? claims.act.sub : undefined;
+
+            logger.info({
+                action: pendingAuthorization.action.kind,
+                subject: claims?.sub,
+                actorSubject,
+                expectedActorSubject: agentConfig.agentID,
+                scopes: pendingAuthorization.scopes,
+            }, "Received delegated OBO access token");
+
+            const message = await executeOboAction(token.accessToken, pendingAuthorization.action);
+
+            sendJson(pendingAuthorization.socket, {
+                type: "response",
+                message,
+            });
+            response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            response.end([
+                "<!doctype html>",
+                "<html><head><title>Wayfinder authorization complete</title></head>",
+                "<body>",
+                "<h1>Authorization complete</h1>",
+                "<p>You can return to Wayfinder. The assistant has completed the approved action.</p>",
+                "</body></html>",
+            ].join(""));
+        } catch (callbackError) {
+            logger.error({ err: callbackError }, "Failed to complete OBO callback");
+            sendJson(pendingAuthorization.socket, {
+                type: "error",
+                message: callbackError instanceof Error ? callbackError.message : "Failed to complete the approved action.",
+            });
+            writeHttpJson(response, 500, {
+                error: callbackError instanceof Error ? callbackError.message : "Failed to complete OBO callback.",
+            });
+        }
+    }
+
     const server = createServer(async (request, response) => {
         const requestId = randomUUID();
         const startedAt = performance.now();
+        const requestUrl = new URL(request.url || "/", `http://${request.headers.host || host}`);
         const requestLogger = logger.child({
             requestId,
             method: request.method,
-            path: request.url,
+            path: requestUrl.pathname,
         });
 
         response.setHeader("X-Request-Id", requestId);
@@ -761,7 +1170,7 @@ async function runAgentServer() {
         });
         requestLogger.info("HTTP request started");
 
-        if (request.url === "/health") {
+        if (requestUrl.pathname === "/health") {
             const activeRuntime = await getRuntime();
 
             writeHttpJson(response, 200, {
@@ -769,13 +1178,20 @@ async function runAgentServer() {
                 features: {
                     dealAlertWebhook: true,
                     cibaBatchTool: activeRuntime.tools.some((tool) => isToolNamed(tool, "process_new_flight_deal_alerts")),
+                    redirectObo: true,
                 },
             });
 
             return;
         }
 
-        if (request.method === "POST" && request.url === "/deal-alerts") {
+        if (request.method === "GET" && requestUrl.pathname === oboCallbackPath && requestUrl.searchParams.has("state")) {
+            await handleOboCallback(requestUrl, response);
+
+            return;
+        }
+
+        if (request.method === "POST" && requestUrl.pathname === "/deal-alerts") {
             try {
                 const payload = await readHttpJsonBody(request);
 
@@ -874,7 +1290,46 @@ async function runAgentServer() {
                             messageLogger.info("Processing chat message");
                             const hardcodedResponse =
                                 await runWithFreshRuntime((activeRuntime) => runHardcodedConsentCommand(latestMessage, activeRuntime.tools));
-                            const responseMessage = hardcodedResponse ?? getResponseContent(
+
+                            if (hardcodedResponse) {
+                                if (isClosed) {
+                                    return;
+                                }
+
+                                sendJson(socket, {
+                                    type: "response",
+                                    message: hardcodedResponse,
+                                });
+                                messageLogger.info({ responseLength: hardcodedResponse.length }, "Chat message processed");
+
+                                return;
+                            }
+
+                            const oboAction = parseOboAction(latestMessage);
+
+                            if (oboAction) {
+                                const authorization = await createOboAuthorization(oboAction, socket);
+                                const responseMessage = `I need your approval to ${authorization.description}. Open the Asgardeo consent page to continue.`;
+
+                                if (isClosed) {
+                                    return;
+                                }
+
+                                sendJson(socket, {
+                                    type: "authorization_required",
+                                    message: responseMessage,
+                                    authorizeUrl: authorization.authorizeUrl,
+                                    scopes: authorization.scopes,
+                                });
+                                messageLogger.info({
+                                    action: oboAction.kind,
+                                    scopes: authorization.scopes,
+                                }, "Sent OBO authorization URL");
+
+                                return;
+                            }
+
+                            const responseMessage = getResponseContent(
                                 (await runWithFreshRuntime((activeRuntime) => activeRuntime.agent.invoke({ messages }))).messages.at(-1)?.content
                             );
 

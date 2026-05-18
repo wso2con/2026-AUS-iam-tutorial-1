@@ -62,11 +62,12 @@ function getAsgardeoOrgName() {
   }
 }
 
-function createChatMessage(role, content) {
+function createChatMessage(role, content, options = {}) {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     role,
-    content
+    content,
+    ...options
   };
 }
 
@@ -350,6 +351,14 @@ function ChatWidget() {
             createChatMessage("assistant", payload.message || "")
           ]);
           setIsProcessing(false);
+        } else if (payload.type === "authorization_required") {
+          setMessages((current) => [
+            ...current,
+            createChatMessage("assistant", payload.message || "Authorize this action to continue.", {
+              authorizeUrl: payload.authorizeUrl || ""
+            })
+          ]);
+          setIsProcessing(false);
         } else if (payload.type === "error") {
           setMessages((current) => [
             ...current,
@@ -516,7 +525,18 @@ function ChatWidget() {
           <div className="chat-messages" role="log" aria-live="polite">
             {messages.map((message) => (
               <div className={`chat-message chat-message--${message.role}`} key={message.id}>
-                {message.content}
+                <span>{message.content}</span>
+                {message.authorizeUrl && (
+                  <a
+                    className="chat-authorization-link"
+                    href={message.authorizeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ShieldCheck size={16} />
+                    <span>Open consent page</span>
+                  </a>
+                )}
               </div>
             ))}
             {dealAlertRequest && (

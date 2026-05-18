@@ -104,7 +104,9 @@ function validateClaims(payload) {
   const tokenAudience = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
 
   if (!expectedAudiences.some((expectedAudience) => tokenAudience.includes(expectedAudience))) {
-    throw new AuthError("Invalid token audience");
+    throw new AuthError(
+      `Invalid token audience. Expected one of: ${expectedAudiences.join(", ")}. Received: ${tokenAudience.filter(Boolean).join(", ") || "none"}`
+    );
   }
 }
 

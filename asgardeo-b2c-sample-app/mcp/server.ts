@@ -72,6 +72,31 @@ function decodeBase64UrlJson(value: string) {
     return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
 }
 
+function getBearerTokenClaims(authorization: string | undefined) {
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+    const parts = token.split(".");
+
+    if (parts.length !== 3) {
+        return null;
+    }
+
+    try {
+        const payload = decodeBase64UrlJson(parts[1]);
+
+        return {
+            audience: payload.aud,
+            issuer: payload.iss,
+            permissions: payload.permissions,
+            roles: payload.roles,
+            scope: payload.scope,
+            scp: payload.scp,
+            subject: payload.sub,
+        };
+    } catch {
+        return null;
+    }
+}
+
 function getUsernameClaimFromAccessToken(accessToken: string) {
     const parts = accessToken.split(".");
 
@@ -314,6 +339,7 @@ async function invokeCiba({
         loginHint,
     });
     const scope = process.env.CIBA_SCOPE?.trim() || "openid profile";
+    const notificationChannel = process.env.CIBA_NOTIFICATION_CHANNEL?.trim() || "email";
     const cibaBody = new URLSearchParams({
         scope,
         login_hint: loginHint,
@@ -321,17 +347,23 @@ async function invokeCiba({
     });
     const actorToken = getBearerToken(authorization);
 
+    if (notificationChannel) {
+        cibaBody.set("notification_channel", notificationChannel);
+    }
+
     if (actorToken && process.env.CIBA_INCLUDE_ACTOR_TOKEN === "true") {
         cibaBody.set("actor_token", actorToken);
     }
 
     cibaLogger.info({
+        notificationChannel,
         scope,
         hasActorToken: cibaBody.has("actor_token"),
     }, "CIBA authorization started");
 
     const cibaResponse = await postAsgardeoForm("/oauth2/ciba", cibaBody, signal, cibaLogger);
     const authReqId = typeof cibaResponse.auth_req_id === "string" ? cibaResponse.auth_req_id : "";
+    const authUrl = typeof cibaResponse.auth_url === "string" ? cibaResponse.auth_url : "";
 
     if (!authReqId) {
         throw new Error("Asgardeo CIBA response did not include auth_req_id.");
@@ -340,6 +372,19 @@ async function invokeCiba({
     const intervalSeconds = Number(cibaResponse.interval || process.env.CIBA_POLL_INTERVAL_SECONDS || 3);
     const expiresInSeconds = Number(cibaResponse.expires_in || 120);
     const timeoutMs = Number(process.env.CIBA_POLL_TIMEOUT_MS || expiresInSeconds * 1000);
+
+    cibaLogger.info({
+        expiresInSeconds,
+        hasAuthUrl: Boolean(authUrl),
+        intervalSeconds,
+    }, "CIBA authorization request accepted");
+
+    if (authUrl && process.env.CIBA_LOG_AUTH_URL === "true") {
+        cibaLogger.warn({
+            authUrl,
+        }, "CIBA authorization URL returned by Asgardeo");
+    }
+
     const pollingStartedAt = Date.now();
     let pollCount = 0;
 
@@ -371,7 +416,7 @@ async function invokeCiba({
             return {
                 accessToken,
                 authReqId,
-                authUrl: typeof cibaResponse.auth_url === "string" ? cibaResponse.auth_url : undefined,
+                authUrl: authUrl || undefined,
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -866,8 +911,12 @@ const httpServer = createServer(async (request, response) => {
             durationMs: getDurationMs(startedAt),
         }, "HTTP request completed");
     });
+
+    const authorizationHeader = getAuthorizationHeader(request);
+
     requestLogger.info({
-        hasAuthorization: Boolean(getAuthorizationHeader(request)),
+        forwardedTokenClaims: getBearerTokenClaims(authorizationHeader),
+        hasAuthorization: Boolean(authorizationHeader),
         contentLength: request.headers["content-length"],
     }, "HTTP request started");
 
@@ -890,7 +939,7 @@ const httpServer = createServer(async (request, response) => {
     }
 
     try {
-        const server = createTravelMcpServer(getAuthorizationHeader(request), requestLogger);
+        const server = createTravelMcpServer(authorizationHeader, requestLogger);
         const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: undefined,
         });

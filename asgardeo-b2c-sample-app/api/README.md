@@ -100,7 +100,6 @@ To require Asgardeo access tokens for protected endpoints:
 API_REQUIRE_AUTH=true
 ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
 ASGARDEO_AUDIENCE=your-wayfinder-api-resource-identifier
-API_PERMISSION_PREFIX=
 ```
 
 ### Configure API authorization in Asgardeo Console
@@ -111,7 +110,7 @@ Register this sample API as a business API resource:
 2. Go to **Resources** > **API Resources**.
 3. Click **New API**.
 4. Enter an identifier for the API resource. Use the same value as `ASGARDEO_AUDIENCE` because Asgardeo includes the API resource identifier in the access token `aud` claim.
-5. Add the Wayfinder scopes listed below. Keep the scope values exactly as shown unless you also configure `API_PERMISSION_PREFIX` to match your prefixed scope naming.
+5. Add the Wayfinder scopes listed below. Keep the scope values exactly as shown.
 6. Enable **Requires authorization** if you want role-based authorization for these scopes.
 7. Click **Finish**.
 
@@ -177,8 +176,8 @@ flights:write
 bookings:read
 profile:read
 profile:write
-deal-alerts:read
-deal-alerts:write
+deal-alert-consents:read
+deal-alert-consents:write
 cds-profiles:read
 cds-profiles:write
 ```

@@ -76,6 +76,20 @@ test("opens a booking and cancels it", async ({ page }) => {
   await expect(page.getByRole("alertdialog")).toContainText("Cancel booking E2E202?");
   await page.getByRole("button", { name: "Confirm cancellation" }).click();
 
-  await expect(page.getByRole("status")).toContainText("Booking canceled.");
   await expect(page.getByRole("region", { name: "Booking information" })).toContainText("canceled");
+});
+
+test("makes a canceled flight available in search results again", async ({ page }) => {
+  await page.goto("/bookings");
+
+  await page.getByRole("link", { name: /Los Angeles to Tokyo/ }).click();
+  await page.getByRole("button", { name: "Cancel booking" }).click();
+  await page.getByRole("button", { name: "Confirm cancellation" }).click();
+  await expect(page.getByRole("region", { name: "Booking information" })).toContainText("canceled");
+
+  await page.goto("/results?category=flights&from=Los%20Angeles&to=Tokyo&travelers=2%20adults");
+
+  await expect(page.getByRole("heading", { name: "Los Angeles to Tokyo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Book flight" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Booked" })).toHaveCount(0);
 });

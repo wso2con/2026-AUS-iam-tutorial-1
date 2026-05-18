@@ -59,4 +59,4 @@ http://localhost:8000/health
 
 If a client sends an `Authorization` header to the MCP endpoint, the MCP server forwards that header to the REST API. This allows protected API endpoints to receive the same bearer token provided by the AI agent.
 
-The CIBA better-deal tool requires `ASGARDEO_BASE_URL`, `CIBA_CLIENT_ID`, and `CIBA_CLIENT_SECRET`. It sends the backchannel request to `/oauth2/ciba`, polls `/oauth2/token` with `grant_type=urn:openid:params:grant-type:ciba`, and uses the user-approved access token to book the new flight and cancel the previous booking.
+The CIBA better-deal tool requires `ASGARDEO_BASE_URL`, `CIBA_CLIENT_ID`, and `CIBA_CLIENT_SECRET`. It sends the backchannel request to `/oauth2/ciba`, polls `/oauth2/token` with `grant_type=urn:openid:params:grant-type:ciba`, and uses the user-approved access token to book the new flight and cancel the previous booking. Set `CIBA_NOTIFICATION_CHANNEL=email` to request email delivery for the approval link. For local debugging, set `CIBA_LOG_AUTH_URL=true` to log an `auth_url` returned by Asgardeo for manual approval.

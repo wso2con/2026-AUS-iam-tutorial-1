@@ -12,6 +12,10 @@ export function getBookingReference(booking) {
   return booking?.bookingReference || formatBookingReference(booking?.id);
 }
 
+export function isActiveBooking(booking) {
+  return booking?.status !== "canceled";
+}
+
 export function isSameFlight(firstFlight, secondFlight) {
   return (
     firstFlight?.from === secondFlight?.from &&

@@ -9,7 +9,7 @@ import {
 } from "../api-queries";
 import { SearchPanel } from "../components/SearchPanel";
 import { ASGARDEO_CLIENT_ID, getCDSProfile, updateCDSProfile } from "../cds-api";
-import { formatPrice, isSameFlight } from "../utils/bookings";
+import { formatPrice, isActiveBooking, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
 
 function extractFavoriteFlightIds(profile) {
@@ -207,7 +207,7 @@ export function ResultsPage({
     const nextBookingStates = {};
 
     for (const result of results) {
-      if (bookedFlightsQuery.data.some((booking) => isSameFlight(result, booking.flight))) {
+      if (bookedFlightsQuery.data.some((booking) => isActiveBooking(booking) && isSameFlight(result, booking.flight))) {
         nextBookingStates[result.id] = "confirmed";
       }
     }

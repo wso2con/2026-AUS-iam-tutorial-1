@@ -11,7 +11,7 @@ import {
 } from "../api-queries";
 import { getBookedFlights } from "../api";
 import { createSignInConfigWithCDSTracker } from "../cds-api";
-import { formatPrice, isSameFlight } from "../utils/bookings";
+import { formatPrice, isActiveBooking, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
 
 export function PaymentPageWithAuth({ criteria, flightId }) {
@@ -68,7 +68,9 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
             queryKey: apiQueryKeys.bookedFlights(auth.userKey),
             queryFn: () => getBookedFlights(auth)
           });
-          const existingBooking = bookings.find((booking) => isSameFlight(flight, booking.flight));
+          const existingBooking = bookings.find((booking) => (
+            isActiveBooking(booking) && isSameFlight(flight, booking.flight)
+          ));
 
           if (existingBooking) {
             navigate(`/bookings/${encodeURIComponent(existingBooking.id)}`);
