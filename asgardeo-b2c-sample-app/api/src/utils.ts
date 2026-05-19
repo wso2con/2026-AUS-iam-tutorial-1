@@ -29,12 +29,10 @@ export function getRoutePermissions(method, path) {
     return method === "GET" ? ["deal-alert-consents:read"] : ["deal-alert-consents:write"];
   }
 
-  if (path === "/api/cds/profiles") {
-    return ["cds-profiles:write"];
-  }
-
-  if (path.startsWith("/api/cds/profiles/")) {
-    return method === "GET" ? ["cds-profiles:read"] : ["cds-profiles:write"];
+  // CDS endpoints are proxied using backend M2M credentials, so they should
+  // not require end-user bearer permissions.
+  if (path === "/api/cds/profiles" || path.startsWith("/api/cds/profiles/")) {
+    return [];
   }
 
   return [];
