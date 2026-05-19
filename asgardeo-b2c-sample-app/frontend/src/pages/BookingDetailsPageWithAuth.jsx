@@ -243,7 +243,7 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
                   </div>
                   <div className="booking-cancel-confirmation-actions">
                     <button
-                      className="booking-cancel-secondary-button"
+                      className="booking-cancel-accent-button"
                       type="button"
                       disabled={isCanceling}
                       onClick={() => setIsCancelConfirmOpen(false)}

@@ -1,5 +1,4 @@
 :root {
-  --color-secondary: #eaf3ff;
   color: #111827;
   background: #ffffff;
   font-family:
@@ -100,14 +99,14 @@ a {
 .brand,
 .auth-cluster,
 .header-nav,
-.primary-small,
+.cta-button,
 .tabs,
 .trip-type,
 .field-control,
 .insight-strip div,
 .section-heading,
 .link-button,
-.secondary-button,
+.accent-button,
 .planner-actions,
 .filter-button,
 .icon-text-button,
@@ -168,10 +167,11 @@ a {
 }
 
 .text-button,
-.primary-small,
+.primary-button,
+.cta-button,
 .icon-text-button,
 .search-button,
-.secondary-button,
+.accent-button,
 .link-button,
 .filter-button {
   min-height: 42px;
@@ -186,7 +186,14 @@ a {
   background: transparent;
 }
 
-.primary-small {
+.primary-button {
+  padding: 0 12px;
+  color: #263136;
+  background: #f1f5f9;
+  border: 1px solid #475569;
+}
+
+.cta-button {
   padding: 0 18px;
   color: #151e24;
   background: #ffd166;
@@ -1429,7 +1436,7 @@ h1 {
 
 .profile-edit-button,
 .profile-primary-button,
-.profile-secondary-button {
+.profile-accent-button {
   display: inline-flex;
   gap: 8px;
   align-items: center;
@@ -1442,7 +1449,7 @@ h1 {
 }
 
 .profile-edit-button,
-.profile-secondary-button {
+.profile-accent-button {
   color: #2563eb;
   background: #ffffff;
   border: 1px solid rgba(37, 99, 235, 0.22);
@@ -1455,7 +1462,7 @@ h1 {
 }
 
 .profile-edit-button:hover,
-.profile-secondary-button:hover {
+.profile-accent-button:hover {
   background: #eff6ff;
 }
 
@@ -1466,7 +1473,7 @@ h1 {
 
 .profile-edit-button:disabled,
 .profile-primary-button:disabled,
-.profile-secondary-button:disabled {
+.profile-accent-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -1885,7 +1892,7 @@ h1 {
 
 .travel-insurance-button,
 .booking-cancel-button,
-.booking-cancel-secondary-button {
+.booking-cancel-accent-button {
   min-height: 44px;
   padding: 0 16px;
   border-radius: 8px;
@@ -1904,14 +1911,14 @@ h1 {
   border: 0;
 }
 
-.booking-cancel-secondary-button {
+.booking-cancel-accent-button {
   color: #7f1d1d;
   background: #ffffff;
   border: 1px solid #fecaca;
 }
 
 .booking-cancel-button:disabled,
-.booking-cancel-secondary-button:disabled {
+.booking-cancel-accent-button:disabled {
   color: #6b7280;
   background: #e5e7eb;
   border-color: #e5e7eb;
@@ -2273,7 +2280,7 @@ h2 {
 }
 
 .two-column .eyebrow {
-  color: #fbbf24;
+  color: #60a5fa;
 }
 
 .section-copy {
@@ -2283,11 +2290,11 @@ h2 {
   line-height: 1.7;
 }
 
-.secondary-button {
+.accent-button {
   gap: 8px;
   padding: 0 18px;
-  color: #111827;
-  background: #fbbf24;
+  color: #ffffff;
+  background: #2563eb;
 }
 
 .stay-list {
@@ -2357,7 +2364,7 @@ h2 {
 }
 
 .faq-item summary::marker {
-  color: #f59e0b;
+  color: #64748b;
 }
 
 .faq-item p {
@@ -3031,7 +3038,7 @@ h2 {
   }
 
   .text-button,
-  .primary-small,
+  .cta-button,
   .icon-text-button {
     min-height: 38px;
     padding: 0 10px;

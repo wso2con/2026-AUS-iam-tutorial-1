@@ -208,7 +208,7 @@ function LiveAuthHeader() {
   return (
     <div className="auth-cluster">
       <button
-        className="text-button"
+        className="primary-button"
         type="button"
         disabled={isLoading}
         onClick={async () => {
@@ -218,9 +218,13 @@ function LiveAuthHeader() {
       >
         Sign in
       </button>
-      <a className="primary-small" href={SIGN_UP_URL}>
+      <button
+        className="cta-button"
+        type="button"
+        onClick={() => { window.location.href = SIGN_UP_URL; }}
+      >
         Sign up
-      </a>
+      </button>
     </div>
   );
 }
@@ -228,10 +232,10 @@ function LiveAuthHeader() {
 function SignedOutHeader({ disabled }) {
   return (
     <div className="auth-cluster">
-      <button className="text-button" type="button" disabled={disabled}>
+      <button className="primary-button" type="button" disabled={disabled}>
         Sign in
       </button>
-      <button className="primary-small" type="button" disabled={disabled}>
+      <button className="cta-button" type="button" disabled={disabled}>
         Sign up
       </button>
     </div>
