@@ -120,6 +120,30 @@ function getAuthorizationHeader(request: IncomingMessage): string | undefined {
     return Array.isArray(authorization) ? authorization[0] : authorization;
 }
 
+class InsufficientScopeError extends Error {
+    constructor() {
+        super("insufficient_scope");
+        this.name = "InsufficientScopeError";
+    }
+}
+
+function withScopeCheck<T extends Record<string, unknown>, R>(fn: (params: T) => Promise<R>) {
+    return async (params: T): Promise<R | { isError: true; content: [{ type: "text"; text: string }] }> => {
+        try {
+            return await fn(params);
+        } catch (error) {
+            if (error instanceof InsufficientScopeError) {
+                return {
+                    isError: true as const,
+                    content: [{ type: "text" as const, text: "insufficient_scope" }],
+                };
+            }
+
+            throw error;
+        }
+    };
+}
+
 function createApiClient(authorization?: string, requestLogger: Logger = logger) {
     async function requestApi(path: string, options: RequestInit = {}): Promise<JsonValue> {
         const startedAt = getStartTime();
@@ -160,6 +184,10 @@ function createApiClient(authorization?: string, requestLogger: Logger = logger)
                 statusCode: response.status,
                 durationMs: getDurationMs(startedAt),
             }, "API request failed");
+
+            if (response.status === 403) {
+                throw new InsufficientScopeError();
+            }
 
             throw new Error(`API request failed with ${response.status}: ${JSON.stringify(body)}`);
         }
@@ -701,7 +729,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
             from: z.string().optional().describe("Departure location, for example Colombo."),
             to: z.string().optional().describe("Arrival location, for example Singapore."),
         },
-        async ({ from, to }) => logToolOperation(requestLogger, "search_flights", { from, to }, async () => {
+        withScopeCheck(async ({ from, to }) => logToolOperation(requestLogger, "search_flights", { from, to }, async () => {
             const params = new URLSearchParams();
 
             if (from) {
@@ -716,7 +744,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
 
             return toToolContent(await api.get(`/api/flights${query ? `?${query}` : ""}`));
         }),
-    );
+    ));
 
     server.tool(
         "search_hotels",
@@ -724,7 +752,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         {
             location: z.string().optional().describe("Hotel location, for example Singapore."),
         },
-        async ({ location }) => logToolOperation(requestLogger, "search_hotels", { location }, async () => {
+        withScopeCheck(async ({ location }) => logToolOperation(requestLogger, "search_hotels", { location }, async () => {
             const params = new URLSearchParams();
 
             if (location) {
@@ -735,7 +763,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
 
             return toToolContent(await api.get(`/api/hotels${query ? `?${query}` : ""}`));
         }),
-    );
+    ));
 
     server.tool(
         "get_trips",
