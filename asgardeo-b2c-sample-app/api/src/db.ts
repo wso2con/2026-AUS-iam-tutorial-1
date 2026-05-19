@@ -4,8 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const defaultDbPath = resolve(__dirname, "..", "wayfinder.sqlite");
-const dbPath = process.env.SQLITE_DB_PATH || defaultDbPath;
+const dbPath = resolve(__dirname, "..", "wayfinder.sqlite");
 
 let db;
 

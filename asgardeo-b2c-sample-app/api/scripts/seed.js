@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const apiRoot = resolve(__dirname, "..");
-const configuredDbPath = process.env.SQLITE_DB_PATH || "wayfinder.sqlite";
+const configuredDbPath = "wayfinder.sqlite";
 const dbPath = resolve(apiRoot, configuredDbPath);
 const schemaPath = resolve(apiRoot, "schema.sql");
 const forceSeed = process.argv.includes("--force") || process.argv.includes("-f");

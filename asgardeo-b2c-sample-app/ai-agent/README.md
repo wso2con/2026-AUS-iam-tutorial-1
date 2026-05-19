@@ -33,7 +33,10 @@ Environment variables:
 
 - `CLIENT_ID`: Client ID of the Asgardeo application used by the agent flow.
 - `ASGARDEO_BASE_URL`: Base URL of your Asgardeo organization.
+- `AGENT_SCOPES`: Space-separated scopes requested for the agent's own token. Defaults to `openid profile deal-alert-consents:write`.
 - `REDIRECT_URI`: Redirect URI configured for the Asgardeo application.
+- `OBO_REDIRECT_URI`: Redirect URI used when the agent asks the user to authorize an on-behalf-of action. Defaults to `REDIRECT_URI` when omitted.
+- `OBO_SCOPES`: Optional space-separated scopes requested for redirect-based on-behalf-of actions. Defaults to the scopes needed by the detected action.
 - `AGENT_ID`: Agent identifier issued by Asgardeo.
 - `AGENT_SECRET`: Agent secret issued by Asgardeo.
 - `GOOGLE_API_KEY`: API key used by the Gemini chat model.
@@ -100,7 +103,14 @@ The server can also send:
 
 - `ready`: Sent after the WebSocket connection is established.
 - `processing`: Sent after a message is accepted and before the agent response is ready.
+- `authorization_required`: Sent when a booking, profile, or user-booking request needs explicit user approval. The payload includes `authorizeUrl`, which the frontend opens in a new tab for Asgardeo consent.
 - `error`: Sent when the message cannot be processed.
+
+## Acting as Itself and On Behalf of the User
+
+The better-deal monitoring flow uses the agent's own Asgardeo agent token to call protected MCP tools such as `store_deal_alert_consent`. The agent application must be authorized to request the Wayfinder API scope used by this tool, for example `deal-alert-consents:write`; otherwise the REST API can reject the forwarded token because the token audience does not include the Wayfinder API.
+
+When the user asks the assistant to create a booking, read their flight bookings, or read their profile, the agent starts a redirect-based on-behalf-of flow instead of receiving a user token over the WebSocket. The authorize request includes `requested_actor=<AGENT_ID>`. After the user approves in Asgardeo, Asgardeo redirects to `OBO_REDIRECT_URI`; the agent exchanges the authorization code for a delegated access token and calls the relevant MCP tool with that token.
 
 ## Notes
 

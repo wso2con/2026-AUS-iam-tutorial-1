@@ -1,7 +1,3 @@
-import { useEffect, useState } from "react";
-import { useAsgardeo } from "@asgardeo/react";
-import { useQueries } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Clock3,
@@ -9,165 +5,10 @@ import {
   LifeBuoy,
   Plane,
   Search,
-  ShieldCheck,
   Sparkles,
   Star
 } from "lucide-react";
-import { apiQueryKeys, useApiAuth } from "../api-queries";
-import { getFlight } from "../api";
 import { SearchPanel } from "../components/SearchPanel";
-import { ASGARDEO_CLIENT_ID, getCDSProfile } from "../cds-api";
-import { buildFlightDetailsPath } from "../utils/routes";
-
-function extractFavoriteFlightIds(profile) {
-  const normalizedProfile = profile?.data || profile?.profile || profile || {};
-  const applicationData = normalizedProfile?.application_data || normalizedProfile?.applicationData || {};
-  const appScopedFavorites = applicationData?.[ASGARDEO_CLIENT_ID]?.fav_flights;
-
-  if (Array.isArray(appScopedFavorites)) {
-    return appScopedFavorites.map((id) => `${id}`);
-  }
-
-  for (const appData of Object.values(applicationData)) {
-    if (Array.isArray(appData?.fav_flights)) {
-      return appData.fav_flights.map((id) => `${id}`);
-    }
-  }
-
-  return [];
-}
-
-function QuickBookingButton({ onClick }) {
-  return (
-    <button
-      className="card-action"
-      type="button"
-      onClick={onClick}
-    >
-      Book flight
-    </button>
-  );
-}
-
-function LoadingFavorites() {
-  return (
-    <div className="empty-state results-loading" role="status" aria-live="polite">
-      <Plane className="results-loading__icon" size={24} aria-hidden="true" />
-      <span>Loading favorite flights...</span>
-    </div>
-  );
-}
-
-function QuickBookingsSection({ cdsProfileId }) {
-  const navigate = useNavigate();
-  const auth = useApiAuth();
-  const [favoriteFlightIds, setFavoriteFlightIds] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadFavorites() {
-      if (!cdsProfileId) {
-        if (isCurrent) {
-          setFavoriteFlightIds([]);
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const profile = await getCDSProfile(cdsProfileId);
-        const favoriteIds = extractFavoriteFlightIds(profile);
-
-        if (isCurrent) {
-          setFavoriteFlightIds(favoriteIds);
-        }
-      } catch (requestError) {
-        if (isCurrent) {
-          setFavoriteFlightIds([]);
-          setError(requestError.message);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadFavorites();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [cdsProfileId]);
-
-  const favoriteFlightQueries = useQueries({
-    queries: favoriteFlightIds.map((id) => ({
-      queryKey: apiQueryKeys.flight(id, auth.userKey),
-      queryFn: () => getFlight(id, auth),
-      enabled: auth.isSignedIn && !auth.isLoading,
-      retry: false
-    }))
-  });
-  const isFavoriteFlightLoading = favoriteFlightQueries.some((query) => query.isLoading);
-  const favoriteFlights = favoriteFlightQueries
-    .map((query) => query.data)
-    .filter(Boolean);
-
-  function handleBooking(itemId) {
-    setError("");
-    navigate(buildFlightDetailsPath(itemId));
-  }
-
-  return (
-    <section className="content-band quick-bookings-section" aria-label="Quick bookings from CDS favorites">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Quick bookings</p>
-          <h2>Your favorite flights</h2>
-        </div>
-      </div>
-
-      {error && (
-        <div className="api-status api-status--error" role="status">
-          {error}
-        </div>
-      )}
-
-      {isLoading || isFavoriteFlightLoading ? (
-        <LoadingFavorites />
-      ) : favoriteFlights.length === 0 ? (
-        <p className="empty-state">No favorite flights found yet. Mark favorites in search results.</p>
-      ) : (
-        <div className="quick-bookings-grid">
-          {favoriteFlights.map((flight) => (
-            <article className="result-card" key={flight.id}>
-              <div>
-                <p className="result-label">
-                  {flight.airline} · {flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}
-                </p>
-                <h2>{flight.from} to {flight.to}</h2>
-                <p>
-                  {flight.departureTime} - {flight.arrivalTime} · {flight.duration} · {flight.dates}
-                </p>
-              </div>
-              <div className="result-side">
-                <strong>{flight.currency === "USD" ? "$" : `${flight.currency} `}{flight.price}</strong>
-                <span>{flight.cabin}</span>
-                <QuickBookingButton onClick={() => handleBooking(flight.id)} />
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
 
 const pageDetails = {
   flights: {
@@ -328,21 +169,13 @@ const pageDetails = {
   }
 };
 
-export function HomePage({
-  category = "flights",
-  hideHeroSupport = false,
-  heroHeading,
-  locations,
-  onSearch,
-  quickBookings
-}) {
+export function HomePage({ category = "flights", locations, onSearch }) {
   const details = pageDetails[category] || pageDetails.flights;
-  const isGreetingHero = hideHeroSupport;
 
   const faqs = [
     {
       question: "How does Wayfinder work?",
-      answer: "Wayfinder helps you search sample flights, hotels, and trip ideas in one place. You can compare routes, prices, dates, and amenities, then sign in to create and manage bookings in the app."
+      answer: "Wayfinder helps you search sample flights, hotels, and trip ideas in one place. You can compare routes, prices, dates, and amenities, then create and manage bookings in the app."
     },
     {
       question: "How can I find a better flight option?",
@@ -354,7 +187,7 @@ export function HomePage({
     },
     {
       question: "Can I book inside Wayfinder?",
-      answer: "Yes. After signing in, you can confirm sample flight, hotel, or trip bookings directly in the app and view them later from My Bookings."
+      answer: "Yes. You can confirm sample flight, hotel, or trip bookings directly in the app and view them later from My Bookings."
     },
     {
       question: "What can I do after I book a flight?",
@@ -376,24 +209,20 @@ export function HomePage({
 
   return (
     <main>
-      <section className={`hero ${isGreetingHero ? "hero--greeting" : ""}`} id="search">
+      <section className="hero" id="search">
         <div className="hero-copy">
-          <h1>{heroHeading || details.heroHeading}</h1>
-          {!hideHeroSupport && (
-            <>
-              <p>{details.heroCopy}</p>
-              <div className="hero-actions" aria-label="Popular planning links">
-                <a className="accent-button" href="#deals">
-                  <Sparkles size={18} />
-                  See ideas
-                </a>
-                <a className="link-button" href="#faq">
-                  FAQ
-                  <ArrowRight size={18} />
-                </a>
-              </div>
-            </>
-          )}
+          <h1>{details.heroHeading}</h1>
+          <p>{details.heroCopy}</p>
+          <div className="hero-actions" aria-label="Popular planning links">
+            <a className="secondary-button" href="#deals">
+              <Sparkles size={18} />
+              See ideas
+            </a>
+            <a className="link-button" href="#faq">
+              FAQ
+              <ArrowRight size={18} />
+            </a>
+          </div>
         </div>
         <SearchPanel
           compact
@@ -414,8 +243,6 @@ export function HomePage({
           </div>
         ))}
       </section>
-
-      {quickBookings}
 
       <section className="content-band" id="deals">
         <div className="section-heading">
@@ -449,7 +276,7 @@ export function HomePage({
           <p className="eyebrow">Why Wayfinder</p>
           <h2>{details.whyTitle}</h2>
           <p className="section-copy">{details.whyCopy}</p>
-          <a className="accent-button" href="#search">
+          <a className="secondary-button" href="#search">
             <Search size={18} />
             Plan a route
           </a>
@@ -511,30 +338,5 @@ export function HomePage({
         </div>
       </section>
     </main>
-  );
-}
-
-export function SignedInHomePage({ category = "flights", cdsProfileId, locations, onSearch }) {
-  const { isSignedIn, user } = useAsgardeo();
-
-  if (!isSignedIn) {
-    return <HomePage category={category} locations={locations} onSearch={onSearch} />;
-  }
-
-  const firstName = user?.name?.givenName || "";
-  const lastName = user?.name?.familyName || "";
-  const fullName = `${firstName} ${lastName}`.trim();
-  const email = user?.email || user?.mail || user?.username || user?.userName || "";
-  const greetingName = firstName || fullName || email || "Traveler";
-
-  return (
-    <HomePage
-      hideHeroSupport
-      category={category}
-      heroHeading={`Welcome back, ${greetingName}.`}
-      quickBookings={category === "flights" ? <QuickBookingsSection cdsProfileId={cdsProfileId} /> : null}
-      locations={locations}
-      onSearch={onSearch}
-    />
   );
 }

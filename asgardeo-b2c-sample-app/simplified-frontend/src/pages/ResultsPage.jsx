@@ -2,33 +2,13 @@ import { useEffect, useState } from "react";
 import { Heart, Plane } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
-  useApiAuth,
   useBookedFlightsQuery,
   useCreateBookingMutation,
   useSearchResultsQuery
 } from "../api-queries";
 import { SearchPanel } from "../components/SearchPanel";
-import { ASGARDEO_CLIENT_ID, getCDSProfile, updateCDSProfile } from "../cds-api";
-import { formatPrice, isActiveBooking, isSameFlight } from "../utils/bookings";
+import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
-
-function extractFavoriteFlightIds(profile) {
-  const normalizedProfile = profile?.data || profile?.profile || profile || {};
-  const applicationData = normalizedProfile?.application_data || normalizedProfile?.applicationData || {};
-  const appScopedFavorites = applicationData?.[ASGARDEO_CLIENT_ID]?.fav_flights;
-
-  if (Array.isArray(appScopedFavorites)) {
-    return appScopedFavorites.map((id) => `${id}`);
-  }
-
-  for (const appData of Object.values(applicationData)) {
-    if (Array.isArray(appData?.fav_flights)) {
-      return appData.fav_flights.map((id) => `${id}`);
-    }
-  }
-
-  return [];
-}
 
 function BookingButton({ bookingState, children, onClick }) {
   const isBooking = bookingState === "booking";
@@ -120,7 +100,7 @@ function ResultCard({ bookingState, category, isFavorite, item, onBook, onSelect
           className={`favorite-button ${isFavorite ? "favorite-button--active" : ""}`}
           type="button"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-          onClick={() => onToggleFavorite(item.id, item)}
+          onClick={() => onToggleFavorite(item.id)}
         >
           <Heart size={20} />
         </button>
@@ -134,65 +114,19 @@ function ResultCard({ bookingState, category, isFavorite, item, onBook, onSelect
   );
 }
 
-export function ResultsPage({
-  auth,
-  cdsProfileId,
-  criteria,
-  includeBookings = false,
-  locations,
-  onSearch
-}) {
+export function ResultsPage({ criteria, locations, onSearch }) {
   const navigate = useNavigate();
-  const [isFavoriteResultLoading, setIsFavoriteResultLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookingStates, setBookingStates] = useState({});
   const [favorites, setFavorites] = useState(() => new Set());
-  const resultsQuery = useSearchResultsQuery(criteria, { auth });
+  const resultsQuery = useSearchResultsQuery(criteria);
   const bookedFlightsQuery = useBookedFlightsQuery({
-    auth,
-    enabled: includeBookings && criteria.category === "flights"
+    enabled: criteria.category === "flights"
   });
-  const createBookingMutation = useCreateBookingMutation(auth);
+  const createBookingMutation = useCreateBookingMutation();
   const results = resultsQuery.data || [];
   const isLoading = resultsQuery.isLoading;
   const requestError = error || resultsQuery.error?.message || "";
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadFavoritesFromCDS() {
-      if (!cdsProfileId || criteria.category !== "flights") {
-        if (isCurrent) {
-          setFavorites(new Set());
-        }
-        return;
-      }
-
-      try {
-        const profile = await getCDSProfile(cdsProfileId);
-        const favoriteIds = extractFavoriteFlightIds(profile);
-
-        if (isCurrent) {
-          setFavorites(new Set(favoriteIds.map((id) => `${id}`)));
-        }
-      } catch (loadError) {
-        if (isCurrent) {
-          setFavorites(new Set());
-        }
-        console.warn("Failed to load CDS favorites:", loadError.message);
-      }
-    }
-
-    setIsFavoriteResultLoading(true);
-    loadFavoritesFromCDS().finally(() => {
-      setIsFavoriteResultLoading(false);
-    });
-
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [cdsProfileId, criteria.category]);
 
   useEffect(() => {
     setError("");
@@ -200,20 +134,20 @@ export function ResultsPage({
   }, [criteria]);
 
   useEffect(() => {
-    if (criteria.category !== "flights" || !includeBookings || !bookedFlightsQuery.data) {
+    if (criteria.category !== "flights" || !bookedFlightsQuery.data) {
       return;
     }
 
     const nextBookingStates = {};
 
     for (const result of results) {
-      if (bookedFlightsQuery.data.some((booking) => isActiveBooking(booking) && isSameFlight(result, booking.flight))) {
+      if (bookedFlightsQuery.data.some((booking) => isSameFlight(result, booking.flight))) {
         nextBookingStates[result.id] = "confirmed";
       }
     }
 
     setBookingStates(nextBookingStates);
-  }, [bookedFlightsQuery.data, criteria.category, includeBookings, results]);
+  }, [bookedFlightsQuery.data, criteria.category, results]);
 
   async function handleBooking(type, itemId) {
     setError("");
@@ -242,32 +176,18 @@ export function ResultsPage({
     }
   }
 
-  async function toggleFavorite(itemId, flight) {
-    const newFavorites = new Set(favorites);
+  function toggleFavorite(itemId) {
+    setFavorites((current) => {
+      const next = new Set(current);
 
-    if (newFavorites.has(itemId)) {
-      newFavorites.delete(itemId);
-    } else {
-      newFavorites.add(itemId);
-    }
-
-    setFavorites(newFavorites);
-
-    if (cdsProfileId && criteria.category === "flights" && flight) {
-      try {
-        const favoritedFlights = Array.from(newFavorites).map((id) => `${id}`);
-
-        await updateCDSProfile(cdsProfileId, {
-          application_data: {
-            [ASGARDEO_CLIENT_ID]: {
-              fav_flights: favoritedFlights
-            }
-          }
-        });
-      } catch (updateError) {
-        console.warn("Failed to update CDS profile:", updateError.message);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
       }
-    }
+
+      return next;
+    });
   }
 
   function handleFlightSelection(itemId) {
@@ -305,11 +225,11 @@ export function ResultsPage({
       )}
 
       <section className="results-section" aria-label="Search results">
-        {(isLoading || isFavoriteResultLoading || bookedFlightsQuery.isLoading) && <LoadingResults />}
-        {!isLoading && !isFavoriteResultLoading && results.length === 0 && (
+        {(isLoading || bookedFlightsQuery.isLoading) && <LoadingResults />}
+        {!isLoading && results.length === 0 && (
           <p className="empty-state">No results matched this search.</p>
         )}
-        {!isLoading && !isFavoriteResultLoading &&
+        {!isLoading &&
           results.map((item) => (
             <ResultCard
               category={criteria.category}
@@ -325,10 +245,4 @@ export function ResultsPage({
       </section>
     </main>
   );
-}
-
-export function ResultsPageWithAuth(props) {
-  const auth = useApiAuth();
-
-  return <ResultsPage {...props} auth={auth} includeBookings />;
 }

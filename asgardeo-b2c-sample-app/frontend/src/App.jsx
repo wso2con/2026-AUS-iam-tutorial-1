@@ -62,11 +62,12 @@ function getAsgardeoOrgName() {
   }
 }
 
-function createChatMessage(role, content) {
+function createChatMessage(role, content, options = {}) {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     role,
-    content
+    content,
+    ...options
   };
 }
 
@@ -207,7 +208,7 @@ function LiveAuthHeader() {
   return (
     <div className="auth-cluster">
       <button
-        className="text-button"
+        className="primary-button"
         type="button"
         disabled={isLoading}
         onClick={async () => {
@@ -217,9 +218,13 @@ function LiveAuthHeader() {
       >
         Sign in
       </button>
-      <a className="primary-small" href={SIGN_UP_URL}>
+      <button
+        className="cta-button"
+        type="button"
+        onClick={() => { window.location.href = SIGN_UP_URL; }}
+      >
         Sign up
-      </a>
+      </button>
     </div>
   );
 }
@@ -227,10 +232,10 @@ function LiveAuthHeader() {
 function SignedOutHeader({ disabled }) {
   return (
     <div className="auth-cluster">
-      <button className="text-button" type="button" disabled={disabled}>
+      <button className="primary-button" type="button" disabled={disabled}>
         Sign in
       </button>
-      <button className="primary-small" type="button" disabled={disabled}>
+      <button className="cta-button" type="button" disabled={disabled}>
         Sign up
       </button>
     </div>
@@ -348,6 +353,14 @@ function ChatWidget() {
           setMessages((current) => [
             ...current,
             createChatMessage("assistant", payload.message || "")
+          ]);
+          setIsProcessing(false);
+        } else if (payload.type === "authorization_required") {
+          setMessages((current) => [
+            ...current,
+            createChatMessage("assistant", payload.message || "Authorize this action to continue.", {
+              authorizeUrl: payload.authorizeUrl || ""
+            })
           ]);
           setIsProcessing(false);
         } else if (payload.type === "error") {
@@ -516,7 +529,18 @@ function ChatWidget() {
           <div className="chat-messages" role="log" aria-live="polite">
             {messages.map((message) => (
               <div className={`chat-message chat-message--${message.role}`} key={message.id}>
-                {message.content}
+                <span>{message.content}</span>
+                {message.authorizeUrl && (
+                  <a
+                    className="chat-authorization-link"
+                    href={message.authorizeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ShieldCheck size={16} />
+                    <span>Open consent page</span>
+                  </a>
+                )}
               </div>
             ))}
             {dealAlertRequest && (

@@ -1,53 +1,8 @@
 import { useEffect, useState } from "react";
-import { useAsgardeo } from "@asgardeo/react";
 import { CircleUserRound, Pencil, Save, ShieldCheck, X } from "lucide-react";
-import { useApiAuth, useProfileQuery, useUpdateProfileMutation } from "../api-queries";
-import { createSignInConfigWithCDSTracker } from "../cds-api";
+import { useProfileQuery, useUpdateProfileMutation } from "../api-queries";
 
 const walletCredentialOffer = import.meta.env.VITE_WALLET_CREDENTIAL_OFFER || "";
-
-function getUserValue(user, keys) {
-  for (const key of keys) {
-    const value = key.split(".").reduce((current, part) => current?.[part], user);
-
-    if (value) {
-      return value;
-    }
-  }
-
-  return "";
-}
-
-function getUserEmail(user) {
-  const email = getUserValue(user, ["email", "mail"]);
-
-  if (email) {
-    return email;
-  }
-
-  const emails = user?.emails;
-
-  if (Array.isArray(emails)) {
-    const primaryEmail = emails.find((item) => item?.primary);
-    const firstEmail = primaryEmail || emails[0];
-
-    if (typeof firstEmail === "string") {
-      return firstEmail;
-    }
-
-    return firstEmail?.value || firstEmail?.display || "";
-  }
-
-  if (typeof emails === "string") {
-    return emails;
-  }
-
-  if (emails && typeof emails === "object") {
-    return emails.value || emails.display || "";
-  }
-
-  return "";
-}
 
 function getProfileEmail(profile) {
   if (profile?.email) {
@@ -89,23 +44,8 @@ function formatMemberSince(value) {
 }
 
 export function ProfilePageWithAuth() {
-  const { isSignedIn, signIn, user } = useAsgardeo();
-  const auth = useApiAuth();
-  const profileQuery = useProfileQuery({ auth });
-  const updateProfileMutation = useUpdateProfileMutation(auth);
-  const claimFirstName = getUserValue(user, ["name.givenName", "given_name", "givenName"]);
-  const claimLastName = getUserValue(user, ["name.familyName", "family_name", "familyName"]);
-  const claimEmail = getUserEmail(user);
-  const profileLoadKey = getUserValue(user, ["sub", "id", "email", "mail"]) || claimEmail || "signed-in-profile";
-  const createdDate = getUserValue(user, [
-    "created_at",
-    "createdAt",
-    "created",
-    "meta.created",
-    "metadata.created",
-    "rawClaims.created_at",
-    "rawClaims.created"
-  ]);
+  const profileQuery = useProfileQuery();
+  const updateProfileMutation = useUpdateProfileMutation();
   const [profile, setProfile] = useState({
     firstName: "",
     lastName: "",
@@ -117,27 +57,8 @@ export function ProfilePageWithAuth() {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const isSaving = updateProfileMutation.isPending;
-  const firstName = profile.firstName;
-  const lastName = profile.lastName;
-  const email = profile.email;
-  const memberSince = profile.memberSince || createdDate;
+  const { firstName, lastName, email, memberSince } = profile;
   const membershipPayload = walletCredentialOffer || email || "wayfinder-membership";
-
-  useEffect(() => {
-    if (!isSignedIn) {
-      return;
-    }
-
-    const claimProfile = {
-      firstName: claimFirstName || "",
-      lastName: claimLastName || "",
-      email: claimEmail || "",
-      memberSince: createdDate || ""
-    };
-
-    setProfile(claimProfile);
-    setDraftProfile(claimProfile);
-  }, [claimFirstName, claimLastName, claimEmail, createdDate, isSignedIn, profileLoadKey]);
 
   useEffect(() => {
     if (!profileQuery.data) {
@@ -145,19 +66,19 @@ export function ProfilePageWithAuth() {
     }
 
     const nextProfile = {
-      firstName: profileQuery.data.firstName || claimFirstName || "",
-      lastName: profileQuery.data.lastName || claimLastName || "",
-      email: getProfileEmail(profileQuery.data) || claimEmail || "",
-      memberSince: profileQuery.data.memberSince || createdDate || ""
+      firstName: profileQuery.data.firstName || "",
+      lastName: profileQuery.data.lastName || "",
+      email: getProfileEmail(profileQuery.data) || "",
+      memberSince: profileQuery.data.memberSince || ""
     };
 
     setProfile(nextProfile);
     setDraftProfile(nextProfile);
-  }, [claimEmail, claimFirstName, claimLastName, createdDate, profileQuery.data]);
+  }, [profileQuery.data]);
 
   useEffect(() => {
     if (profileQuery.error) {
-      console.warn("Unable to load Asgardeo profile:", profileQuery.error);
+      console.warn("Unable to load profile:", profileQuery.error);
     }
   }, [profileQuery.error]);
 
@@ -206,34 +127,10 @@ export function ProfilePageWithAuth() {
       setProfile(displayProfile);
       setDraftProfile(displayProfile);
       setIsEditing(false);
-      setStatusMessage("Profile updated in Asgardeo.");
+      setStatusMessage("Profile updated.");
     } catch (error) {
-      setErrorMessage(error.message || "Unable to update your profile in Asgardeo.");
+      setErrorMessage(error.message || "Unable to update your profile.");
     }
-  }
-
-  if (!isSignedIn) {
-    return (
-      <main className="bookings-page">
-        <section className="management-empty">
-          <div>
-            <p className="eyebrow">Profile</p>
-            <h1>Sign in to view your profile.</h1>
-            <p>Your Wayfinder profile is available after authentication.</p>
-          </div>
-          <button
-            className="dashboard-action dashboard-action--secondary"
-            type="button"
-            onClick={async () => {
-              const signInConfig = await createSignInConfigWithCDSTracker();
-              signIn(signInConfig);
-            }}
-          >
-            Sign in
-          </button>
-        </section>
-      </main>
-    );
   }
 
   return (
@@ -300,7 +197,7 @@ export function ProfilePageWithAuth() {
                 />
               </label>
               <div className="profile-edit-actions">
-                <button className="profile-accent-button" type="button" onClick={cancelEditing} disabled={isSaving}>
+                <button className="profile-secondary-button" type="button" onClick={cancelEditing} disabled={isSaving}>
                   <X size={16} />
                   <span>Cancel</span>
                 </button>

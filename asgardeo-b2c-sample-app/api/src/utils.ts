@@ -4,16 +4,6 @@ import { hasBearerToken, resolveBearerUser } from "./auth.js";
 import { findFlights, findHotels } from "./db.js";
 import { logger } from "./logger.js";
 
-const permissionPrefix = process.env.API_PERMISSION_PREFIX || "wayfinder:";
-
-export function permission(area, action) {
-  const permissionName = `${area}:${action}`;
-
-  return permissionPrefix
-    ? [`${permissionPrefix}${permissionName}`, permissionName]
-    : [permissionName];
-}
-
 export function getRoutePermissions(method, path) {
   if (path === "/health" || method === "OPTIONS") {
     return [];
@@ -24,27 +14,27 @@ export function getRoutePermissions(method, path) {
   }
 
   if (path === "/api/flights" || path.startsWith("/api/flights/")) {
-    return permission("flights", "write");
+    return ["flights:write"];
   }
 
   if (path === "/api/me" || path === "/api/me/profile") {
-    return method === "PATCH" ? permission("profile", "write") : permission("profile", "read");
+    return method === "PATCH" ? ["profile:write"] : ["profile:read"];
   }
 
   if (path === "/api/bookings" || path.startsWith("/api/bookings/")) {
-    return method === "GET" ? permission("bookings", "read") : permission("bookings", "write");
+    return method === "GET" ? ["bookings:read"] : ["bookings:write"];
   }
 
   if (path === "/api/deal-alert-consents" || path.startsWith("/api/deal-alert-consents/")) {
-    return method === "GET" ? permission("deal-alerts", "read") : permission("deal-alerts", "write");
+    return method === "GET" ? ["deal-alert-consents:read"] : ["deal-alert-consents:write"];
   }
 
   if (path === "/api/cds/profiles") {
-    return permission("cds-profiles", "write");
+    return ["cds-profiles:write"];
   }
 
   if (path.startsWith("/api/cds/profiles/")) {
-    return method === "GET" ? permission("cds-profiles", "read") : permission("cds-profiles", "write");
+    return method === "GET" ? ["cds-profiles:read"] : ["cds-profiles:write"];
   }
 
   return [];

@@ -86,8 +86,7 @@ a {
   position: sticky;
   top: 0;
   z-index: 1000;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   gap: 24px;
   align-items: center;
   padding: 18px clamp(20px, 5vw, 72px);
@@ -99,14 +98,14 @@ a {
 .brand,
 .auth-cluster,
 .header-nav,
-.cta-button,
+.primary-small,
 .tabs,
 .trip-type,
 .field-control,
 .insight-strip div,
 .section-heading,
 .link-button,
-.accent-button,
+.secondary-button,
 .planner-actions,
 .filter-button,
 .icon-text-button,
@@ -122,8 +121,13 @@ a {
 }
 
 .header-nav {
+  flex: 1;
   gap: 8px;
   justify-content: center;
+}
+
+.site-header p {
+  margin: 0;
 }
 
 .header-nav a,
@@ -167,11 +171,10 @@ a {
 }
 
 .text-button,
-.primary-button,
-.cta-button,
+.primary-small,
 .icon-text-button,
 .search-button,
-.accent-button,
+.secondary-button,
 .link-button,
 .filter-button {
   min-height: 42px;
@@ -186,14 +189,7 @@ a {
   background: transparent;
 }
 
-.primary-button {
-  padding: 0 12px;
-  color: #263136;
-  background: #f1f5f9;
-  border: 1px solid #475569;
-}
-
-.cta-button {
+.primary-small {
   padding: 0 18px;
   color: #151e24;
   background: #ffd166;
@@ -1436,7 +1432,7 @@ h1 {
 
 .profile-edit-button,
 .profile-primary-button,
-.profile-accent-button {
+.profile-secondary-button {
   display: inline-flex;
   gap: 8px;
   align-items: center;
@@ -1449,7 +1445,7 @@ h1 {
 }
 
 .profile-edit-button,
-.profile-accent-button {
+.profile-secondary-button {
   color: #2563eb;
   background: #ffffff;
   border: 1px solid rgba(37, 99, 235, 0.22);
@@ -1462,7 +1458,7 @@ h1 {
 }
 
 .profile-edit-button:hover,
-.profile-accent-button:hover {
+.profile-secondary-button:hover {
   background: #eff6ff;
 }
 
@@ -1473,7 +1469,7 @@ h1 {
 
 .profile-edit-button:disabled,
 .profile-primary-button:disabled,
-.profile-accent-button:disabled {
+.profile-secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -1892,7 +1888,7 @@ h1 {
 
 .travel-insurance-button,
 .booking-cancel-button,
-.booking-cancel-accent-button {
+.booking-cancel-secondary-button {
   min-height: 44px;
   padding: 0 16px;
   border-radius: 8px;
@@ -1911,14 +1907,14 @@ h1 {
   border: 0;
 }
 
-.booking-cancel-accent-button {
+.booking-cancel-secondary-button {
   color: #7f1d1d;
   background: #ffffff;
   border: 1px solid #fecaca;
 }
 
 .booking-cancel-button:disabled,
-.booking-cancel-accent-button:disabled {
+.booking-cancel-secondary-button:disabled {
   color: #6b7280;
   background: #e5e7eb;
   border-color: #e5e7eb;
@@ -2280,7 +2276,7 @@ h2 {
 }
 
 .two-column .eyebrow {
-  color: #60a5fa;
+  color: #fbbf24;
 }
 
 .section-copy {
@@ -2290,11 +2286,11 @@ h2 {
   line-height: 1.7;
 }
 
-.accent-button {
+.secondary-button {
   gap: 8px;
   padding: 0 18px;
-  color: #ffffff;
-  background: #2563eb;
+  color: #111827;
+  background: #fbbf24;
 }
 
 .stay-list {
@@ -2364,7 +2360,7 @@ h2 {
 }
 
 .faq-item summary::marker {
-  color: #64748b;
+  color: #f59e0b;
 }
 
 .faq-item p {
@@ -2736,25 +2732,6 @@ h2 {
   font-style: italic;
 }
 
-.chat-authorization-link {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  min-height: 36px;
-  margin-top: 10px;
-  padding: 0 12px;
-  color: #ffffff;
-  background: #2563eb;
-  border-radius: 8px;
-  font-size: 0.86rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.chat-authorization-link:hover {
-  background: #1d4ed8;
-}
-
 .chat-choice-row {
   display: flex;
   flex-wrap: wrap;
@@ -3038,7 +3015,7 @@ h2 {
   }
 
   .text-button,
-  .cta-button,
+  .primary-small,
   .icon-text-button {
     min-height: 38px;
     padding: 0 10px;

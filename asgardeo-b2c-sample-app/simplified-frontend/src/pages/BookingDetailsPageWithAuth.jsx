@@ -1,31 +1,26 @@
 import { useEffect, useState } from "react";
-import { useAsgardeo } from "@asgardeo/react";
 import { Link } from "react-router-dom";
 import { Ban, ChevronLeft, Plane, ShieldCheck } from "lucide-react";
-import { useApiAuth, useBookedFlightsQuery, useCancelBookingMutation } from "../api-queries";
-import { createSignInConfigWithCDSTracker } from "../cds-api";
+import { useBookedFlightsQuery, useCancelBookingMutation } from "../api-queries";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
 export function BookingDetailsPageWithAuth({ bookingId }) {
-  const { isSignedIn, signIn } = useAsgardeo();
-  const auth = useApiAuth();
-  const bookingsQuery = useBookedFlightsQuery({ auth });
-  const cancelBookingMutation = useCancelBookingMutation(auth);
+  const bookingsQuery = useBookedFlightsQuery();
+  const cancelBookingMutation = useCancelBookingMutation();
   const [booking, setBooking] = useState(null);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const hasBookingData = Array.isArray(bookingsQuery.data);
   const isLoading =
-    auth.isLoading
-    || bookingsQuery.isLoading
+    bookingsQuery.isLoading
     || (!bookingsQuery.error && !hasBookingData)
     || (!booking && bookingsQuery.isFetching);
   const isCanceling = cancelBookingMutation.isPending;
   const isCanceled = booking?.status === "canceled";
 
   useEffect(() => {
-    if (!isSignedIn || auth.isLoading || bookingsQuery.isLoading) {
+    if (bookingsQuery.isLoading) {
       return;
     }
 
@@ -54,14 +49,12 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
     setError(bookingsQuery.error?.message || (selectedBooking ? "" : "Booking not found."));
     setStatusMessage("");
   }, [
-    auth.isLoading,
     bookingId,
     bookingsQuery.data,
     bookingsQuery.error,
     bookingsQuery.isFetching,
     bookingsQuery.isLoading,
-    hasBookingData,
-    isSignedIn
+    hasBookingData
   ]);
 
   async function handleCancelBooking() {
@@ -81,30 +74,6 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
     } catch (requestError) {
       setError(requestError.message);
     }
-  }
-
-  if (!isSignedIn) {
-    return (
-      <main className="bookings-page">
-        <section className="management-empty">
-          <div>
-            <p className="eyebrow">Booking details</p>
-            <h1>Sign in to view this booking.</h1>
-            <p>Booking details are available after authentication.</p>
-          </div>
-          <button
-            className="dashboard-action dashboard-action--secondary"
-            type="button"
-            onClick={async () => {
-              const signInConfig = await createSignInConfigWithCDSTracker();
-              signIn(signInConfig);
-            }}
-          >
-            Sign in
-          </button>
-        </section>
-      </main>
-    );
   }
 
   return (
@@ -243,7 +212,7 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
                   </div>
                   <div className="booking-cancel-confirmation-actions">
                     <button
-                      className="booking-cancel-accent-button"
+                      className="booking-cancel-secondary-button"
                       type="button"
                       disabled={isCanceling}
                       onClick={() => setIsCancelConfirmOpen(false)}

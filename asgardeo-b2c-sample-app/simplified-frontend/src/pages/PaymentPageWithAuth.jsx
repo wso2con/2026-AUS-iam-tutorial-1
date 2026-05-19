@@ -1,33 +1,27 @@
 import { useState } from "react";
-import { useAsgardeo } from "@asgardeo/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, CreditCard, Eye, EyeOff } from "lucide-react";
 import {
   apiQueryKeys,
-  useApiAuth,
   useCreateBookingMutation,
   useFlightQuery
 } from "../api-queries";
 import { getBookedFlights } from "../api";
-import { createSignInConfigWithCDSTracker } from "../cds-api";
-import { formatPrice, isActiveBooking, isSameFlight } from "../utils/bookings";
+import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
 
 export function PaymentPageWithAuth({ criteria, flightId }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { isSignedIn, signIn, user } = useAsgardeo();
-  const auth = useApiAuth();
-  const flightQuery = useFlightQuery(flightId, { auth });
-  const createBookingMutation = useCreateBookingMutation(auth);
+  const flightQuery = useFlightQuery(flightId);
+  const createBookingMutation = useCreateBookingMutation();
   const flight = flightQuery.data;
   const isLoading = flightQuery.isLoading;
   const [paymentState, setPaymentState] = useState("idle");
   const [isCvcVisible, setIsCvcVisible] = useState(false);
   const [actionError, setActionError] = useState("");
   const error = actionError || flightQuery.error?.message || "";
-  const username = user?.userName || user?.username || user?.email || user?.sub || "";
 
   async function handlePayment() {
     if (!flight) {
@@ -41,18 +35,13 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
       const booking = await createBookingMutation.mutateAsync({
         type: "flight",
         itemId: flight.id,
-        travelers: Number.parseInt(criteria.travelers, 10) || 1,
-        user: {
-          id: username,
-          username,
-          email: user?.email || user?.mail
-        }
+        travelers: Number.parseInt(criteria.travelers, 10) || 1
       });
 
       window.dispatchEvent(new CustomEvent("wayfinder:deal-alert-consent", {
         detail: {
           bookingId: booking.id,
-          username: username || booking.username,
+          username: booking.username || "",
           routeFrom: flight.from,
           routeTo: flight.to,
           currentPrice: flight.price,
@@ -65,12 +54,10 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
       try {
         if (requestError.message.includes("already exists")) {
           const bookings = await queryClient.fetchQuery({
-            queryKey: apiQueryKeys.bookedFlights(auth.userKey),
-            queryFn: () => getBookedFlights(auth)
+            queryKey: apiQueryKeys.bookedFlights(),
+            queryFn: () => getBookedFlights()
           });
-          const existingBooking = bookings.find((booking) => (
-            isActiveBooking(booking) && isSameFlight(flight, booking.flight)
-          ));
+          const existingBooking = bookings.find((booking) => isSameFlight(flight, booking.flight));
 
           if (existingBooking) {
             navigate(`/bookings/${encodeURIComponent(existingBooking.id)}`);
@@ -84,30 +71,6 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
       setPaymentState("idle");
       setActionError(requestError.message);
     }
-  }
-
-  if (!isSignedIn) {
-    return (
-      <main className="bookings-page">
-        <section className="management-empty">
-          <div>
-            <p className="eyebrow">Payment</p>
-            <h1>Sign in to complete payment.</h1>
-            <p>Your flight will be booked only after payment is completed.</p>
-          </div>
-          <button
-            className="dashboard-action dashboard-action--secondary"
-            type="button"
-            onClick={async () => {
-              const signInConfig = await createSignInConfigWithCDSTracker();
-              signIn(signInConfig);
-            }}
-          >
-            Sign in
-          </button>
-        </section>
-      </main>
-    );
   }
 
   return (
