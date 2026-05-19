@@ -52,7 +52,7 @@ async def exchange_code(agent_auth: AgentAuth, code: str, code_verifier: str):
     async with AgentAuthManager(
         agent_auth.asgardeo_config, agent_auth.agent_config
     ) as auth_manager:
-        agent_token = await auth_manager.get_agent_token(_required_env("AGENT_SCOPES").split(" "))
+        agent_token = await agent_auth.ensure_valid_token()
         obo_token = await auth_manager.get_obo_token(
             code,
             agent_token=agent_token,
