@@ -1,26 +1,68 @@
 openapi: 3.0.3
 info:
   title: Wayfinder Travel API
-  version: 0.1.0
-  description: REST API for the Wayfinder Travel sample application.
+  version: 0.2.0
+  description: |
+    REST API for the Wayfinder Travel sample application.
+
+    ## Authentication & Authorization
+
+    **Public endpoints** are accessible without authentication and do not enforce any scopes.
+
+    **Protected endpoints** (When API_REQUIRE_AUTH environment variable is set to `true`) require a valid Asgardeo bearer token. The token must carry
+    the scopes listed for each endpoint. Requests without a valid token receive `401 Unauthorized`.
+
+    ### Scopes
+
+    | Scope | Purpose |
+    |---|---|
+    | `flights:write` | Create and delete flights |
+    | `bookings:read` | Read the authenticated user's bookings |
+    | `profile:read` | Read the authenticated user's profile |
+    | `profile:write` | Update the authenticated user's profile |
+    | `deal-alert-consents:read` | Read better-deal alert consents |
+    | `deal-alert-consents:write` | Create and manage better-deal alert consents |
+    | `cds-profiles:read` | Read Customer Data Store profiles |
+    | `cds-profiles:write` | Create and update Customer Data Store profiles |
+
 servers:
   - url: http://localhost:8787
     description: Local development server
+
 tags:
   - name: Health
   - name: Flights
+    description: |
+      Flight search (public) and flight management (protected).
+      Search endpoints require no authentication. Creating or deleting flights requires the `flights:write` scope.
   - name: Hotels
+    description: Hotel search — public, no authentication required.
   - name: Trips
+    description: Saved sample trips — public, no authentication required.
   - name: Locations
+    description: Searchable location list — public, no authentication required.
   - name: Bookings
+    description: Booking management — protected endpoints requiring a valid bearer token.
   - name: Deal Alerts
+    description: Better-deal alert consent management — protected endpoints.
   - name: User
+    description: Authenticated user identity and profile — protected endpoints requiring a valid bearer token.
+  - name: CDS Profiles
+    description: Customer Data Store profile management — protected endpoints.
+
+# ---------------------------------------------------------------------------
+# PATHS
+# ---------------------------------------------------------------------------
 paths:
+
+  # ── Health ────────────────────────────────────────────────────────────────
+
   /health:
     get:
       tags:
         - Health
       summary: Check API health
+      description: Public endpoint — no authentication required.
       responses:
         "200":
           description: API is healthy
@@ -32,11 +74,15 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  # ── Flights (public search) ───────────────────────────────────────────────
+
   /api/flights:
     get:
       tags:
         - Flights
       summary: Search flights
+      description: Public endpoint — no authentication required.
       parameters:
         - name: from
           in: query
@@ -70,11 +116,135 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Flight"
+
+    post:
+      tags:
+        - Flights
+      summary: Create a flight
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `flights:write`
+      security:
+        - AsgardeoOAuth2:
+            - flights:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlightRequest"
+      responses:
+        "201":
+          description: Flight created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Flight"
+        "400":
+          description: Invalid flight data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `flights:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/flights/{flightId}:
+    get:
+      tags:
+        - Flights
+      summary: Get a flight by ID
+      description: Public endpoint — no authentication required.
+      parameters:
+        - name: flightId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: flight-cmb-sin-01
+      responses:
+        "200":
+          description: Flight details
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Flight"
+        "404":
+          description: Flight not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags:
+        - Flights
+      summary: Delete a flight
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `flights:write`
+      security:
+        - AsgardeoOAuth2:
+            - flights:write
+      parameters:
+        - name: flightId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: flight-cmb-sin-01
+      responses:
+        "204":
+          description: Flight deleted
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `flights:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Flight not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Hotels (public) ───────────────────────────────────────────────────────
+
   /api/hotels:
     get:
       tags:
         - Hotels
       summary: Search hotels
+      description: Public endpoint — no authentication required.
       parameters:
         - name: location
           in: query
@@ -102,11 +272,15 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Hotel"
+
+  # ── Trips (public) ────────────────────────────────────────────────────────
+
   /api/trips:
     get:
       tags:
         - Trips
       summary: List saved sample trips
+      description: Public endpoint — no authentication required.
       parameters:
         - name: destination
           in: query
@@ -128,11 +302,15 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Trip"
+
+  # ── Locations (public) ────────────────────────────────────────────────────
+
   /api/locations:
     get:
       tags:
         - Locations
       summary: List searchable locations
+      description: Public endpoint — no authentication required.
       parameters:
         - name: category
           in: query
@@ -158,15 +336,20 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Location"
+
+  # ── Bookings (protected) ──────────────────────────────────────────────────
+
   /api/bookings:
     post:
       tags:
         - Bookings
       summary: Create a booking
-      description: Requires an Asgardeo bearer token when `API_REQUIRE_AUTH=true`.
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        No additional scopes beyond a valid token are required.
       security:
-        - AsgardeoBearerAuth: []
-        - {}
+        - AsgardeoOAuth2: []
       requestBody:
         required: true
         content:
@@ -199,15 +382,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
   /api/bookings/flights:
     get:
       tags:
         - Bookings
       summary: List booked flights for the current user
-      description: Requires an Asgardeo bearer token when `API_REQUIRE_AUTH=true`.
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `bookings:read`
       security:
-        - AsgardeoBearerAuth: []
-        - {}
+        - AsgardeoOAuth2:
+            - bookings:read
       responses:
         "200":
           description: Current user's booked flights
@@ -228,11 +415,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `bookings:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/bookings/flights/{bookingId}:
     get:
       tags:
         - Bookings
       summary: Get a booked flight by booking ID
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `bookings:read`
+      security:
+        - AsgardeoOAuth2:
+            - bookings:read
       parameters:
         - name: bookingId
           in: path
@@ -251,21 +452,37 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/BookedFlight"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `bookings:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Booking not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
   /api/bookings/{bookingId}/price:
     patch:
       tags:
         - Bookings
       summary: Update a booked flight price
-      description: Used after CIBA consent to apply a better deal to a booked flight.
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Used after CIBA consent to apply a better deal to a booked flight.
+        No additional scopes beyond a valid token are required.
       security:
-        - AsgardeoBearerAuth: []
-        - {}
+        - AsgardeoOAuth2: []
       parameters:
         - name: bookingId
           in: path
@@ -308,15 +525,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
   /api/bookings/{bookingId}/cancel:
     patch:
       tags:
         - Bookings
       summary: Cancel a booked flight
-      description: Updates the booking status to canceled and disables better-deal alerts for the booking.
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Updates the booking status to canceled and disables better-deal alerts for the booking.
+        No additional scopes beyond a valid token are required.
       security:
-        - AsgardeoBearerAuth: []
-        - {}
+        - AsgardeoOAuth2: []
       parameters:
         - name: bookingId
           in: path
@@ -347,11 +568,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  # ── Deal Alert Consents (protected) ───────────────────────────────────────
+
   /api/deal-alert-consents:
     post:
       tags:
         - Deal Alerts
       summary: Store better-deal alert consent for a booked flight
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `deal-alert-consents:write`
+      security:
+        - AsgardeoOAuth2:
+            - deal-alert-consents:write
       requestBody:
         required: true
         content:
@@ -370,23 +601,97 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/DealAlertConsent"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `deal-alert-consents:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Booking not found for username
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /api/deal-alert-consents/transfer:
+    post:
+      tags:
+        - Deal Alerts
+      summary: Transfer deal alert consents between users
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Transfers all active deal alert consents from one username to another.
+
+        **Required scope:** `deal-alert-consents:write`
+      security:
+        - AsgardeoOAuth2:
+            - deal-alert-consents:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealAlertConsentTransferRequest"
+      responses:
+        "200":
+          description: Transferred consents
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DealAlertConsent"
+        "400":
+          description: Invalid transfer request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `deal-alert-consents:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/deal-alert-consents/{username}:
     get:
       tags:
         - Deal Alerts
       summary: List enabled better-deal alert consents for a username
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `deal-alert-consents:read`
+      security:
+        - AsgardeoOAuth2:
+            - deal-alert-consents:read
       parameters:
         - name: username
           in: path
           required: true
           schema:
             type: string
+          example: local.traveler
       responses:
         "200":
           description: Enabled consents
@@ -401,18 +706,38 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/DealAlertConsent"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `deal-alert-consents:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── User (protected) ──────────────────────────────────────────────────────
+
   /api/me:
     get:
       tags:
         - User
-      summary: Get current user profile
-      description: Requires an Asgardeo bearer token when `API_REQUIRE_AUTH=true`.
+      summary: Get current user identity
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Returns basic identity claims extracted from the Asgardeo access token.
+
+        **Required scope:** `profile:read`
       security:
-        - AsgardeoBearerAuth: []
-        - {}
+        - AsgardeoOAuth2:
+            - profile:read
       responses:
         "200":
-          description: Current user profile
+          description: Current user identity
           content:
             application/json:
               schema:
@@ -428,14 +753,306 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `profile:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/me/profile:
+    get:
+      tags:
+        - User
+      summary: Get current user's extended profile
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Returns the authenticated user's extended profile stored in the application database.
+
+        **Required scope:** `profile:read`
+      security:
+        - AsgardeoOAuth2:
+            - profile:read
+      responses:
+        "200":
+          description: Current user's extended profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `profile:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    patch:
+      tags:
+        - User
+      summary: Update current user's extended profile
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Updates the authenticated user's extended profile in the application database.
+
+        **Required scope:** `profile:write`
+      security:
+        - AsgardeoOAuth2:
+            - profile:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserProfileRequest"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: Invalid profile data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `profile:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── CDS Profiles (protected) ──────────────────────────────────────────────
+
+  /api/cds/profiles:
+    post:
+      tags:
+        - CDS Profiles
+      summary: Create a CDS profile
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Creates a new Customer Data Store profile for a user.
+
+        **Required scope:** `cds-profiles:write`
+      security:
+        - AsgardeoOAuth2:
+            - cds-profiles:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCdsProfileRequest"
+      responses:
+        "201":
+          description: CDS profile created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CdsProfile"
+        "400":
+          description: Invalid profile data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `cds-profiles:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Profile already exists for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/cds/profiles/{profileId}:
+    get:
+      tags:
+        - CDS Profiles
+      summary: Get a CDS profile by ID
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `cds-profiles:read`
+      security:
+        - AsgardeoOAuth2:
+            - cds-profiles:read
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: cds-profile-abc123
+      responses:
+        "200":
+          description: CDS profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CdsProfile"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `cds-profiles:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: CDS profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    patch:
+      tags:
+        - CDS Profiles
+      summary: Update a CDS profile
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        **Required scope:** `cds-profiles:write`
+      security:
+        - AsgardeoOAuth2:
+            - cds-profiles:write
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: cds-profile-abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCdsProfileRequest"
+      responses:
+        "200":
+          description: Updated CDS profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CdsProfile"
+        "400":
+          description: Invalid profile data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `cds-profiles:write` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: CDS profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+# ---------------------------------------------------------------------------
+# COMPONENTS
+# ---------------------------------------------------------------------------
 components:
   securitySchemes:
-    AsgardeoBearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Asgardeo access token.
+    AsgardeoOAuth2:
+      type: oauth2
+      description: |
+        Asgardeo OAuth2 / OIDC authentication. Replace `{your-org}` in the URLs below
+        with your Asgardeo organization name.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://api.asgardeo.io/t/{your-org}/oauth2/authorize
+          tokenUrl: https://api.asgardeo.io/t/{your-org}/oauth2/token
+          scopes:
+            flights:write: Create and delete flights
+            bookings:read: Read the authenticated user's flight bookings
+            profile:read: Read the authenticated user's identity and extended profile
+            profile:write: Update the authenticated user's extended profile
+            deal-alert-consents:read: Read better-deal alert consent records
+            deal-alert-consents:write: Create and manage better-deal alert consents
+            cds-profiles:read: Read Customer Data Store profiles
+            cds-profiles:write: Create and update Customer Data Store profiles
+
   schemas:
+
+    # ── Domain objects ────────────────────────────────────────────────────
+
     Flight:
       type: object
       required:
@@ -496,6 +1113,7 @@ components:
           example:
             - Best value
             - Nonstop
+
     Hotel:
       type: object
       required:
@@ -533,6 +1151,7 @@ components:
             - Breakfast
             - Pool
             - Airport shuttle
+
     Trip:
       type: object
       required:
@@ -569,63 +1188,7 @@ components:
         currency:
           type: string
           example: USD
-    CreateBookingRequest:
-      type: object
-      required:
-        - type
-        - itemId
-      properties:
-        type:
-          type: string
-          enum:
-            - flight
-            - hotel
-            - trip
-          example: flight
-        itemId:
-          type: string
-          example: flight-cmb-sin-01
-        travelers:
-          type: integer
-          minimum: 1
-          default: 1
-          example: 2
-    UpdateBookingPriceRequest:
-      type: object
-      required:
-        - price
-      properties:
-        username:
-          type: string
-          example: local.traveler
-        price:
-          type: number
-          minimum: 0
-          example: 266.9
-    DealAlertConsentRequest:
-      type: object
-      required:
-        - bookingId
-        - username
-        - routeFrom
-        - routeTo
-        - enabled
-      properties:
-        bookingId:
-          type: string
-          example: booking-2cd80f0a-17b8-4d2f-a436-44595fa0aa44
-        username:
-          type: string
-          example: local.traveler
-        routeFrom:
-          type: string
-          example: Colombo
-        routeTo:
-          type: string
-          example: Singapore
-        enabled:
-          type: boolean
-          example: true
+
     Location:
       type: object
       required:
@@ -638,6 +1201,7 @@ components:
         type:
           type: string
           example: city
+
     Booking:
       type: object
       required:
@@ -678,6 +1242,7 @@ components:
         createdAt:
           type: string
           format: date-time
+
     BookedFlight:
       type: object
       required:
@@ -705,6 +1270,7 @@ components:
           format: date-time
         flight:
           $ref: "#/components/schemas/Flight"
+
     DealAlertConsent:
       type: object
       required:
@@ -747,6 +1313,7 @@ components:
         updatedAt:
           type: string
           format: date-time
+
     User:
       type: object
       required:
@@ -771,6 +1338,275 @@ components:
         rawClaims:
           type: object
           additionalProperties: true
+
+    UserProfile:
+      type: object
+      required:
+        - userId
+        - username
+      properties:
+        userId:
+          type: string
+          example: local-demo-user
+        username:
+          type: string
+          example: local.traveler
+        email:
+          type: string
+          format: email
+          example: local.traveler@example.com
+        givenName:
+          type: string
+          example: Local
+        familyName:
+          type: string
+          example: Traveler
+        preferredCurrency:
+          type: string
+          example: USD
+        preferredCabin:
+          type: string
+          enum:
+            - Economy
+            - Business
+            - First
+          example: Economy
+        updatedAt:
+          type: string
+          format: date-time
+
+    CdsProfile:
+      type: object
+      required:
+        - id
+        - userId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: cds-profile-abc123
+        userId:
+          type: string
+          example: local-demo-user
+        loyaltyTier:
+          type: string
+          enum:
+            - Standard
+            - Silver
+            - Gold
+            - Platinum
+          example: Gold
+        totalMilesEarned:
+          type: integer
+          example: 15000
+        preferredAirline:
+          type: string
+          example: Serendib Air
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── Request bodies ────────────────────────────────────────────────────
+
+    CreateFlightRequest:
+      type: object
+      required:
+        - from
+        - to
+        - airline
+        - departureTime
+        - arrivalTime
+        - duration
+        - stops
+        - price
+        - currency
+        - cabin
+        - dates
+      properties:
+        from:
+          type: string
+          example: Colombo
+        to:
+          type: string
+          example: Singapore
+        airline:
+          type: string
+          example: Serendib Air
+        departureTime:
+          type: string
+          example: "08:45"
+        arrivalTime:
+          type: string
+          example: "15:05"
+        duration:
+          type: string
+          example: 3h 50m
+        stops:
+          type: integer
+          example: 0
+        price:
+          type: number
+          example: 314
+        currency:
+          type: string
+          example: USD
+        cabin:
+          type: string
+          example: Economy
+        dates:
+          type: string
+          example: Jun 12 - Jun 18
+        tags:
+          type: array
+          items:
+            type: string
+          example:
+            - Best value
+            - Nonstop
+
+    CreateBookingRequest:
+      type: object
+      required:
+        - type
+        - itemId
+      properties:
+        type:
+          type: string
+          enum:
+            - flight
+            - hotel
+            - trip
+          example: flight
+        itemId:
+          type: string
+          example: flight-cmb-sin-01
+        travelers:
+          type: integer
+          minimum: 1
+          default: 1
+          example: 2
+
+    UpdateBookingPriceRequest:
+      type: object
+      required:
+        - price
+      properties:
+        username:
+          type: string
+          example: local.traveler
+        price:
+          type: number
+          minimum: 0
+          example: 266.9
+
+    DealAlertConsentRequest:
+      type: object
+      required:
+        - bookingId
+        - username
+        - routeFrom
+        - routeTo
+        - enabled
+      properties:
+        bookingId:
+          type: string
+          example: booking-2cd80f0a-17b8-4d2f-a436-44595fa0aa44
+        username:
+          type: string
+          example: local.traveler
+        routeFrom:
+          type: string
+          example: Colombo
+        routeTo:
+          type: string
+          example: Singapore
+        enabled:
+          type: boolean
+          example: true
+
+    DealAlertConsentTransferRequest:
+      type: object
+      required:
+        - fromUsername
+        - toUsername
+      properties:
+        fromUsername:
+          type: string
+          example: old.traveler
+        toUsername:
+          type: string
+          example: new.traveler
+
+    UpdateUserProfileRequest:
+      type: object
+      properties:
+        givenName:
+          type: string
+          example: Local
+        familyName:
+          type: string
+          example: Traveler
+        preferredCurrency:
+          type: string
+          example: USD
+        preferredCabin:
+          type: string
+          enum:
+            - Economy
+            - Business
+            - First
+          example: Economy
+
+    CreateCdsProfileRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          example: local-demo-user
+        loyaltyTier:
+          type: string
+          enum:
+            - Standard
+            - Silver
+            - Gold
+            - Platinum
+          example: Standard
+        totalMilesEarned:
+          type: integer
+          minimum: 0
+          default: 0
+          example: 0
+        preferredAirline:
+          type: string
+          example: Serendib Air
+
+    UpdateCdsProfileRequest:
+      type: object
+      properties:
+        loyaltyTier:
+          type: string
+          enum:
+            - Standard
+            - Silver
+            - Gold
+            - Platinum
+          example: Platinum
+        totalMilesEarned:
+          type: integer
+          minimum: 0
+          example: 20000
+        preferredAirline:
+          type: string
+          example: Serendib Air
+
+    # ── Errors ────────────────────────────────────────────────────────────
+
     Error:
       type: object
       required:
