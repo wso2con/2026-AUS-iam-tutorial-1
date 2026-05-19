@@ -20,9 +20,11 @@ import { performance } from "node:perf_hooks";
 import type { Duplex } from "node:stream";
 
 import { AsgardeoJavaScriptClient, type TokenResponse } from "@asgardeo/javascript";
+import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+import { ChatOpenAI } from "@langchain/openai";
 import dotenv from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,10 +52,36 @@ const agentConfig = {
     agentSecret: process.env.AGENT_SECRET || "",
 };
 
-const model = new ChatGoogleGenerativeAI({
-    apiKey: process.env.GOOGLE_API_KEY || "",
-    model: process.env.MODEL_NAME || "gemini-2.5-flash",
-});
+type LlmProvider = "gemini" | "openai" | "claude" | "deepseek";
+const llmProvider = (process.env.LLM_PROVIDER || "gemini").toLowerCase() as LlmProvider;
+
+function createLlmModel() {
+    switch (llmProvider) {
+        case "openai":
+            return new ChatOpenAI({
+                apiKey: process.env.OPENAI_API_KEY || "",
+                model: process.env.MODEL_NAME || "gpt-4o",
+            });
+        case "claude":
+            return new ChatAnthropic({
+                apiKey: process.env.ANTHROPIC_API_KEY || "",
+                model: process.env.MODEL_NAME || "claude-opus-4-7",
+            });
+        case "deepseek":
+            return new ChatOpenAI({
+                apiKey: process.env.DEEPSEEK_API_KEY || "",
+                model: process.env.MODEL_NAME || "deepseek-chat",
+                configuration: {
+                    baseURL: "https://api.deepseek.com/v1",
+                },
+            });
+        default:
+            return new ChatGoogleGenerativeAI({
+                apiKey: process.env.GOOGLE_API_KEY || "",
+                model: process.env.MODEL_NAME || "gemini-2.5-flash",
+            });
+    }
+}
 
 const agentPrompt = [
     "You are Wayfinder's travel assistant.",
@@ -363,6 +391,10 @@ function sanitizeToolSchemasForGemini<T extends ToolWithSchema>(tools: T[]): T[]
     });
 }
 
+function maybeApplyGeminiSchema<T extends ToolWithSchema>(tools: T[]): T[] {
+    return llmProvider === "gemini" ? sanitizeToolSchemasForGemini(tools) : tools;
+}
+
 function parseChatRequest(payload: string): ChatMessage[] {
 
     try {
@@ -615,7 +647,7 @@ async function getDelegatedTools(accessToken: string) {
         },
     });
 
-    const tools = sanitizeToolSchemasForGemini(await client.getTools());
+    const tools = maybeApplyGeminiSchema(await client.getTools());
 
     return { client, tools };
 }
@@ -953,13 +985,13 @@ async function createAgent() {
         },
     });
 
-    const tools = sanitizeToolSchemasForGemini(await client.getTools());
+    const tools = maybeApplyGeminiSchema(await client.getTools());
     logger.info({
         tools: tools.map((tool) => tool.name).filter(Boolean),
     }, "Loaded MCP tools");
 
     const agent = createReactAgent({
-        llm: model,
+        llm: createLlmModel(),
         tools: tools,
         prompt: agentPrompt,
     });
@@ -1416,7 +1448,7 @@ async function runAgentServer() {
         logger.info({
             chatUrl: `ws://${host}:${port}/chat`,
             healthUrl: `http://${host}:${port}/health`,
-        }, "AI agent WebSocket server started");
+        }, "AI agent started");
     });
 
     const shutdown = async () => {
