@@ -498,7 +498,7 @@ const dealAlertMatchSchema = z.object({
         currency: z.string().nullish(),
         cabin: z.string().nullish(),
         dates: z.string().nullish(),
-        tags: z.array(z.unknown()).optional(),
+        tags: z.array(z.string()).optional(),
     }),
 });
 
