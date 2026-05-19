@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAsgardeo } from "@asgardeo/react";
 import {
   ChevronDown,
@@ -530,7 +531,7 @@ function TravelAssistantWidget() {
           <div className="chat-messages" role="log" aria-live="polite">
             {messages.map((message) => (
               <div className={`chat-message chat-message--${message.role}`} key={message.id}>
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                 {message.authorizeUrl && (
                   <a
                     className="chat-authorization-link"

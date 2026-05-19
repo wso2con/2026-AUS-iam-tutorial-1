@@ -2801,6 +2801,33 @@ h2 {
   text-decoration: underline;
 }
 
+.chat-message table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 0.85em;
+}
+
+.chat-message th,
+.chat-message td {
+  border: 1px solid #d1d5db;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.chat-message th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+.chat-message--assistant table th {
+  background: #e8edf5;
+}
+
+.chat-message tr:nth-child(even) td {
+  background: #f9fafb;
+}
+
 .chat-authorization-link {
   display: inline-flex;
   gap: 8px;
