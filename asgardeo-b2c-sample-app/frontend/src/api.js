@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
+const AGENT_API_BASE_URL = import.meta.env.VITE_AGENT_API_BASE_URL;
 
 async function requestJson(path, options = {}) {
   const { auth, authRequired = false, body, ...fetchOptions } = options;
@@ -181,4 +182,42 @@ export async function updateProfile(profile, auth) {
   });
 
   return response.data;
+}
+
+async function requestAgentJson(path, options = {}) {
+  const { auth, body, ...fetchOptions } = options;
+  const headers = {
+    "Content-Type": "application/json",
+    ...await getAuthHeaders(auth, { required: true }),
+    ...fetchOptions.headers
+  };
+
+  const response = await fetch(`${AGENT_API_BASE_URL}${path}`, {
+    ...fetchOptions,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    headers
+  });
+  const responseBody = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const detail = Array.isArray(responseBody.detail)
+      ? responseBody.detail.map((item) => item.msg || item.message || String(item)).join(", ")
+      : responseBody.detail;
+
+    throw new Error(responseBody.message || responseBody.error || detail || "Agent request failed");
+  }
+
+  return responseBody;
+}
+
+export async function sendAgentChatMessage(message, auth) {
+  return await requestAgentJson("/api/chat", {
+    auth,
+    method: "POST",
+    body: { message }
+  });
+}
+
+export async function getAgentOboUrl(auth) {
+  return await requestAgentJson("/api/obo/url", { auth });
 }

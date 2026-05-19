@@ -4,7 +4,6 @@
   Smart Employee Agent — Agent Server (Resource Server)
 
   A FastAPI server that:
-  - Validates user JWTs (requires agent_access scope)
   - Hosts a LangChain AI agent connected to the WayFinder MCP server
   - Manages its own credentials for basic MCP access (Pattern 2)
   - Handles OBO flow for elevated user-specific actions (Pattern 3)
@@ -70,15 +69,12 @@ def _resolve_wayfinder_mcp_url() -> str:
     base = os.getenv("CHOREO_HR_SERVER_SERVICEURL", "").rstrip("/")
     if base:
         return f"{base}/mcp"
-    return "http://127.0.0.1:8000/mcp"
+    return "http://localhost:8000/mcp"
 
 
 WAYFINDER_MCP_SERVER_URL = _resolve_wayfinder_mcp_url()
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 logger.info("WayFinder MCP server URL: %s", WAYFINDER_MCP_SERVER_URL)
-
-# Base URL for WayFinder MCP server reset endpoint
-WAYFINDER_MCP_SERVER_URL = WAYFINDER_MCP_SERVER_URL.replace("/mcp", "")
 
 # Cap on chat-history turns replayed to the model per request (user+assistant = 1 turn).
 MAX_CHAT_HISTORY_TURNS = int(os.getenv("MAX_CHAT_HISTORY_TURNS", "20"))
@@ -106,7 +102,7 @@ async def _fetch_jwks():
 async def validate_user_token(token: str) -> dict:
     """Validate a user JWT and return the payload.
 
-    Checks signature, expiry, issuer, audience, and agent_access scope.
+    Checks signature, expiry, issuer, audience, and scopes.
     """
     global _jwks_cache
 
@@ -143,10 +139,6 @@ async def validate_user_token(token: str) -> dict:
                 "verify_aud": True,
             },
         )
-
-        scopes = payload.get("scope", "").split()
-        if "agent_access" not in scopes:
-            raise HTTPException(status_code=403, detail="Token missing required scope: agent_access")
 
         return payload
 
@@ -283,7 +275,7 @@ app = FastAPI(title="WayFinder Travel Agent")
 
 ALLOWED_ORIGINS = [
     o.strip()
-    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    for o in os.getenv("ALLOWED_ORIGINS").split(",")
     if o.strip()
 ]
 

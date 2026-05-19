@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MessageCircle, Send, ShieldCheck, X } from "lucide-react";
+import { getAgentOboUrl, sendAgentChatMessage } from "../api";
+import { useApiAuth } from "../api-queries";
 
-const AGENT_CHAT_URL = import.meta.env.VITE_AGENT_CHAT_URL || "ws://localhost:8790/chat";
 const DEFAULT_DEAL_ALERT_CRITERIA = {
   minimumSavingsPercent: 10,
   maxStops: null,
@@ -21,8 +22,16 @@ function createChatMessage(role, content, options = {}) {
 }
 
 export function ChatWidget() {
+  const auth = useApiAuth();
+  const isChatUnavailable = auth.isLoading || !auth.isSignedIn;
+  const connectionStatus = useMemo(() => {
+    if (auth.isLoading) {
+      return "connecting";
+    }
+
+    return auth.isSignedIn ? "connected" : "disconnected";
+  }, [auth.isLoading, auth.isSignedIn]);
   const [isOpen, setIsOpen] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [messages, setMessages] = useState([
     createChatMessage("assistant", "Hi, I can help with travel questions and booking details.")
   ]);
@@ -30,113 +39,12 @@ export function ChatWidget() {
   const [dealAlertCriteria, setDealAlertCriteria] = useState(DEFAULT_DEAL_ALERT_CRITERIA);
   const [draft, setDraft] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const socketRef = useRef(null);
-  const queuedAgentMessageRef = useRef(null);
-  const reconnectTimerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) {
       setIsProcessing(false);
-      setConnectionStatus("disconnected");
-      return undefined;
     }
-
-    let isCurrent = true;
-    let retryDelay = 700;
-
-    function connect() {
-      if (!isCurrent) {
-        return;
-      }
-
-      setConnectionStatus("connecting");
-      const socket = new WebSocket(AGENT_CHAT_URL);
-      socketRef.current = socket;
-
-      socket.addEventListener("open", () => {
-        if (!isCurrent) {
-          return;
-        }
-
-        retryDelay = 700;
-        setConnectionStatus("connected");
-
-        if (queuedAgentMessageRef.current) {
-          const queuedMessage = queuedAgentMessageRef.current;
-          queuedAgentMessageRef.current = null;
-          socket.send(JSON.stringify({ message: queuedMessage }));
-        }
-      });
-
-      socket.addEventListener("message", (event) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        let payload;
-
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          payload = { type: "message", message: event.data };
-        }
-
-        if (payload.type === "message" || payload.type === "response") {
-          setMessages((current) => [
-            ...current,
-            createChatMessage("assistant", payload.message || "")
-          ]);
-          setIsProcessing(false);
-        } else if (payload.type === "authorization_required") {
-          setMessages((current) => [
-            ...current,
-            createChatMessage("assistant", payload.message || "Authorize this action to continue.", {
-              authorizeUrl: payload.authorizeUrl || ""
-            })
-          ]);
-          setIsProcessing(false);
-        } else if (payload.type === "error") {
-          setMessages((current) => [
-            ...current,
-            createChatMessage("assistant", payload.message || "I could not process that request.")
-          ]);
-          setIsProcessing(false);
-        }
-      });
-
-      socket.addEventListener("close", () => {
-        if (!isCurrent) {
-          return;
-        }
-
-        setConnectionStatus("disconnected");
-        socketRef.current = null;
-        reconnectTimerRef.current = window.setTimeout(connect, retryDelay);
-        retryDelay = Math.min(retryDelay * 1.6, 4000);
-      });
-
-      socket.addEventListener("error", () => {
-        if (!isCurrent) {
-          return;
-        }
-
-        setConnectionStatus("disconnected");
-      });
-    }
-
-    connect();
-
-    return () => {
-      isCurrent = false;
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
-    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -177,22 +85,51 @@ export function ChatWidget() {
     };
   }, []);
 
-  function sendAgentMessage(message, displayContent = message) {
+  async function sendAgentMessage(message, displayContent = message) {
     setMessages((current) => [...current, createChatMessage("user", displayContent)]);
     setDraft("");
     setIsProcessing(true);
 
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ message }));
-      return;
-    }
+    try {
+      const payload = await sendAgentChatMessage(message, auth);
 
-    queuedAgentMessageRef.current = message;
-    setIsOpen(true);
+      if (payload.type === "message" || payload.type === "response") {
+        setMessages((current) => [
+          ...current,
+          createChatMessage("assistant", payload.message || "")
+        ]);
+      } else if (payload.type === "obo_required" || payload.type === "authorization_required") {
+        let authorizeUrl = payload.authorizeUrl || payload.auth_url || "";
+
+        if (!authorizeUrl) {
+          const oboResponse = await getAgentOboUrl(auth);
+          authorizeUrl = oboResponse.auth_url || "";
+        }
+
+        setMessages((current) => [
+          ...current,
+          createChatMessage("assistant", payload.message || "Authorize this action to continue.", {
+            authorizeUrl
+          })
+        ]);
+      } else if (payload.type === "error") {
+        setMessages((current) => [
+          ...current,
+          createChatMessage("assistant", payload.message || "I could not process that request.")
+        ]);
+      }
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        createChatMessage("assistant", error.message || "I could not process that request.")
+      ]);
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   function handleDealAlertChoice(enabled) {
-    if (!dealAlertRequest || isProcessing) {
+    if (!dealAlertRequest || isProcessing || isChatUnavailable) {
       return;
     }
 
@@ -229,7 +166,7 @@ export function ChatWidget() {
 
     const message = draft.trim();
 
-    if (!message || isProcessing) {
+    if (!message || isProcessing || isChatUnavailable) {
       return;
     }
 
@@ -333,7 +270,7 @@ export function ChatWidget() {
                   <button
                     className="chat-choice-button chat-choice-button--primary"
                     type="button"
-                    disabled={isProcessing}
+                    disabled={isProcessing || isChatUnavailable}
                     onClick={() => handleDealAlertChoice(true)}
                   >
                     Save alerts
@@ -341,7 +278,7 @@ export function ChatWidget() {
                   <button
                     className="chat-choice-button chat-choice-button--secondary"
                     type="button"
-                    disabled={isProcessing}
+                    disabled={isProcessing || isChatUnavailable}
                     onClick={() => handleDealAlertChoice(false)}
                   >
                     No thanks
@@ -368,7 +305,7 @@ export function ChatWidget() {
             <button
               className="chat-send-button"
               type="submit"
-              disabled={!draft.trim() || isProcessing}
+              disabled={!draft.trim() || isProcessing || isChatUnavailable}
               aria-label="Send message"
             >
               <Send size={18} />
