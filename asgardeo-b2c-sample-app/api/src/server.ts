@@ -24,20 +24,54 @@ const port = Number(process.env.PORT || 8787);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 const app = express();
 
+function decodeBase64UrlJson(value: string): unknown {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+
+  return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+}
+
+function getBearerTokenPayload(request: any): Record<string, unknown> | null {
+  const authorization = request.headers.authorization;
+  const authHeader = Array.isArray(authorization) ? authorization[0] : authorization;
+
+  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice("Bearer ".length).trim();
+  const [, payload] = token.split(".");
+
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const decodedPayload = decodeBase64UrlJson(payload);
+
+    return decodedPayload && typeof decodedPayload === "object"
+      ? decodedPayload as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function getRequestTokenLogContext(request: any) {
-  const rawClaims = request.authenticatedUser?.rawClaims;
+  const rawClaims = getBearerTokenPayload(request);
 
   if (!rawClaims || typeof rawClaims !== "object") {
     return {};
   }
 
   const actorClaim = rawClaims.act;
+  const actorSub = actorClaim && typeof actorClaim === "object"
+    ? (actorClaim as Record<string, unknown>).sub
+    : undefined;
 
   return {
     sub: typeof rawClaims.sub === "string" ? rawClaims.sub : undefined,
-    actor: actorClaim && typeof actorClaim === "object" && typeof actorClaim.sub === "string"
-      ? actorClaim.sub
-      : undefined
+    actor: typeof actorSub === "string" ? actorSub : undefined
   };
 }
 
@@ -65,14 +99,14 @@ app.use((request: any, response, next) => {
   const requestLogger = logger.child({
     requestId,
     method: request.method,
-    path: request.path
+    path: request.path,
+    ...getRequestTokenLogContext(request)
   });
 
   request.log = requestLogger;
   response.setHeader("X-Request-Id", requestId);
   response.on("finish", () => {
     requestLogger.info({
-      ...getRequestTokenLogContext(request),
       statusCode: response.statusCode,
       durationMs: Number((performance.now() - startedAt).toFixed(1))
     }, "HTTP request completed");
