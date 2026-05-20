@@ -97,3 +97,12 @@ export async function updateProfile(profile) {
 
   return response.data;
 }
+
+export async function createDealAlertConsent(consent) {
+  const response = await requestJson("/api/deal-alert-consents", {
+    method: "POST",
+    body: consent
+  });
+
+  return response.data;
+}

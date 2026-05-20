@@ -1,8 +1,8 @@
-# AI Agent
+# Ambient Agent
 
-This folder contains a Langchain AI agent that demonstrates Asgardeo agent authentication.
+This folder contains the Wayfinder ambient agent that demonstrates Asgardeo agent authentication.
 
-The agent authenticates with Asgardeo using agent credentials, receives an agent access token, and uses that token to call a protected MCP server. The MCP tools are then exposed to a LangChain ReAct agent backed by a configured LLM, so clients can connect to the `/chat` WebSocket endpoint and let the agent call MCP tools on their behalf.
+The agent authenticates with Asgardeo using agent credentials, receives an agent access token, and uses that token to call a protected MCP server. It exposes one business webhook endpoint that is triggered whenever a new flight is added to the Wayfinder database.
 
 ## What It Demonstrates
 
@@ -10,14 +10,17 @@ The agent authenticates with Asgardeo using agent credentials, receives an agent
 - Requesting an agent token through `@asgardeo/javascript`
 - Passing the agent token to an MCP server as a bearer token
 - Loading MCP tools with `@langchain/mcp-adapters`
-- Serving a `/chat` WebSocket endpoint for agent conversations
+- Receiving new-flight events through a webhook
+- Comparing new flights against existing better-deal alert consents
+- Using a LangGraph ReAct agent to write smart CIBA approval messages
+- Starting CIBA approval flows for relevant users through a native LangChain tool in the ambient agent
 
 ## Local Configuration
 
 Install dependencies:
 
 ```bash
-cd ai-agent
+cd ambient-agent
 npm install
 ```
 
@@ -34,16 +37,16 @@ Then update the values in `.env` for your local setup.
 Start your MCP server first, then run the AI agent:
 
 ```bash
-cd ai-agent
+cd ambient-agent
 npm run dev
 ```
 
 The dev command watches `agent.ts` and restarts the agent after code changes. Use `npm start` when you want a non-watching process.
 
-The chat endpoint is available at:
+The new-flight webhook endpoint is available at:
 
 ```text
-ws://localhost:8790/chat
+http://localhost:8790/deal-alerts
 ```
 
 The health endpoint is available at:
@@ -54,50 +57,49 @@ http://localhost:8790/health
 
 ## Better-Deal Alert Flow
 
-After a flight booking, the B2C frontend opens the agent widget and shows an embedded criteria picker for offline better-deal alerts. The frontend sends the booking, route, consent value, and criteria to the agent, and the agent calls the `store_deal_alert_consent` MCP tool.
+After a flight booking, the B2C frontend stores offline better-deal alert consent through `POST /api/deal-alert-consents`.
 
-When the API receives a new flight through `POST /api/flights`, it checks enabled deal-alert consents for matching routes and criteria. If there are matches, it calls the agent's `POST /deal-alerts` webhook. The agent invokes the `process_new_flight_deal_alerts` MCP tool, which starts CIBA flows for the matched users. The first user who approves gets the new flight booked and their previous booking canceled; the remaining pending polls are canceled.
+When the API receives a new flight through `POST /api/flights`, it calls the ambient agent's `POST /deal-alerts` webhook with the new flight details. The agent fetches enabled deal-alert consent candidates from MCP, compares the new flight against their saved route and criteria, asks a LangGraph ReAct agent to write user-friendly CIBA binding messages, and invokes its native `process_new_flight_deal_alerts` LangChain tool for the relevant users. The first user who approves gets the new flight booked and their previous booking canceled; the remaining pending polls are canceled.
 
-## WebSocket Protocol
+## Webhook Payload
 
-Connect to `/chat` and send either a plain text message:
-
-```text
-Add 45 and 99
-```
-
-Or a JSON payload:
+Send a JSON payload with a `flight` object:
 
 ```json
 {
-  "message": "Add 45 and 99"
+  "flight": {
+    "id": "flight-colombo-singapore-new",
+    "from": "Colombo",
+    "to": "Singapore",
+    "airline": "WSO2 Air",
+    "departureTime": "08:30",
+    "arrivalTime": "14:30",
+    "duration": "4h 30m",
+    "stops": 0,
+    "price": 320,
+    "currency": "USD",
+    "cabin": "Economy",
+    "dates": "May 27"
+  }
 }
 ```
 
-The server responds with JSON messages. A successful agent reply has this shape:
+The server accepts the event immediately:
 
 ```json
 {
-  "type": "response",
-  "message": "144"
+  "status": "accepted",
+  "flightId": "flight-colombo-singapore-new"
 }
 ```
 
-The server can also send:
+## Acting as Itself
 
-- `ready`: Sent after the WebSocket connection is established.
-- `processing`: Sent after a message is accepted and before the agent response is ready.
-- `authorization_required`: Sent when a booking, profile, or user-booking request needs explicit user approval. The payload includes `authorizeUrl`, which the frontend opens in a new tab for Asgardeo consent.
-- `error`: Sent when the message cannot be processed.
+The better-deal monitoring flow uses the agent's own Asgardeo agent token to call protected MCP tools such as `list_deal_alert_consents`. The agent application must be authorized to request the Wayfinder API scope used by this tool, for example `deal-alert-consents:read`; otherwise the REST API can reject the forwarded token because the token audience does not include the Wayfinder API.
 
-## Acting as Itself and On Behalf of the User
-
-The better-deal monitoring flow uses the agent's own Asgardeo agent token to call protected MCP tools such as `store_deal_alert_consent`. The agent application must be authorized to request the Wayfinder API scope used by this tool, for example `deal-alert-consents:write`; otherwise the REST API can reject the forwarded token because the token audience does not include the Wayfinder API.
-
-When the user asks the assistant to create a booking, read their flight bookings, or read their profile, the agent starts a redirect-based on-behalf-of flow instead of receiving a user token over the WebSocket. The authorize request includes `requested_actor=<AGENT_ID>`. After the user approves in Asgardeo, Asgardeo redirects to `OBO_REDIRECT_URI`; the agent exchanges the authorization code for a delegated access token and calls the relevant MCP tool with that token.
+The native CIBA tool uses `CLIENT_ID` and `CLIENT_SECRET` for Asgardeo CIBA endpoint authorization, and passes the ambient agent access token as `actor_token` in the CIBA authorization request. Configure `ASGARDEO_BASE_URL`, `CIBA_SCOPE`, `CIBA_NOTIFICATION_CHANNEL`, `CIBA_POLL_INTERVAL_SECONDS`, and `CIBA_POLL_TIMEOUT_MS` in the ambient agent environment as needed. Set `CIBA_LOG_AUTH_URL=true` only for local debugging when you need to inspect an `auth_url` returned by Asgardeo.
 
 ## Notes
 
 - The MCP server must accept `Authorization: Bearer <agent-access-token>`.
-- The WebSocket endpoint currently accepts text frames with either plain text or JSON payloads.
 - The sample is intended for local demos and development. Do not commit real agent secrets, API keys, or local `.env` files.

@@ -172,12 +172,6 @@ export async function logOperation<T>({
 }
 
 function summarizeToolArgs(toolName: string, args: Record<string, unknown>) {
-    if (toolName === "process_new_flight_deal_alerts") {
-        return {
-            matchCount: Array.isArray(args.matches) ? args.matches.length : 0,
-        };
-    }
-
     if (toolName === "store_deal_alert_consent") {
         return {
             bookingId: args.bookingId,

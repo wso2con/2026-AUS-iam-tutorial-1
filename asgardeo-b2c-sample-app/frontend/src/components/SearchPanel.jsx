@@ -453,32 +453,6 @@ export function SearchPanel({
         </button>
       </div>
 
-      {category === "flights" && (
-        <div className="trip-type">
-          <button
-            className={`pill ${tripType === "round-trip" ? "pill--selected" : ""}`}
-            type="button"
-            onClick={() => setTripType("round-trip")}
-          >
-            Round trip
-          </button>
-          <button
-            className={`pill ${tripType === "one-way" ? "pill--selected" : ""}`}
-            type="button"
-            onClick={() => setTripType("one-way")}
-          >
-            One way
-          </button>
-          <button
-            className={`pill ${tripType === "multi-city" ? "pill--selected" : ""}`}
-            type="button"
-            onClick={() => setTripType("multi-city")}
-          >
-            Multi-city
-          </button>
-        </div>
-      )}
-
       <form className={`search-grid search-grid--${category}`} onSubmit={handleSubmit}>
         {!isHotelSearch && (
           <LocationField

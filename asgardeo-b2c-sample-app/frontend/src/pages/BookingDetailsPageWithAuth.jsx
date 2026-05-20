@@ -132,7 +132,11 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
         </div>
       )}
 
-      {isLoading && <p className="empty-state management-message">Loading booking details...</p>}
+      {isLoading && (
+        <p className="empty-state management-message booking-detail-loading">
+          Loading booking details...
+        </p>
+      )}
 
       {!isLoading && booking && (
         <section className="booking-detail-panel booking-confirmed-panel" aria-label="Booking information">

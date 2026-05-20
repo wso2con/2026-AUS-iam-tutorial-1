@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getRequestUserHint, resolveUser } from "../auth.js";
 import {
   getBookedFlightById,
+  listAllEnabledDealAlertConsents,
   listEnabledDealAlertConsents,
   transferDealAlertConsentBooking,
   upsertDealAlertConsent
@@ -167,6 +168,12 @@ export function registerDealAlertRoutes(app) {
 
     sendJson(response, result.statusCode, result.body);
   }));
+
+  app.get("/api/deal-alert-consents", (_request: any, response: any) => {
+    sendJson(response, 200, {
+      data: listAllEnabledDealAlertConsents()
+    });
+  });
 
   app.post("/api/deal-alert-consents/transfer", asyncHandler(async (request, response) => {
     const result = await handleDealAlertConsentTransfer(request);

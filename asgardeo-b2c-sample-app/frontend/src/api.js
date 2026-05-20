@@ -184,6 +184,17 @@ export async function updateProfile(profile, auth) {
   return response.data;
 }
 
+export async function createDealAlertConsent(consent, auth) {
+  const response = await requestJson("/api/deal-alert-consents", {
+    auth,
+    authRequired: true,
+    method: "POST",
+    body: consent
+  });
+
+  return response.data;
+}
+
 async function requestAgentJson(path, options = {}) {
   const { auth, body, ...fetchOptions } = options;
   const headers = {

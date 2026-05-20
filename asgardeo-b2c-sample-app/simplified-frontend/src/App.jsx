@@ -14,6 +14,7 @@ import { HomePage } from "./pages/HomePage";
 import { PaymentPageWithAuth } from "./pages/PaymentPageWithAuth";
 import { ProfilePageWithAuth } from "./pages/ProfilePageWithAuth";
 import { ResultsPage } from "./pages/ResultsPage";
+import { createDealAlertConsent } from "./api";
 import { buildResultsPath, readCriteria } from "./utils/routes";
 import wayfinderLogo from "./assets/wayfinder-logo.png";
 
@@ -63,6 +64,7 @@ function TravelAssistantWidget() {
   });
   const [draft, setDraft] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAgentConnectionEnabled, setIsAgentConnectionEnabled] = useState(false);
   const socketRef = useRef(null);
   const queuedAgentMessageRef = useRef(null);
   const reconnectTimerRef = useRef(null);
@@ -71,6 +73,12 @@ function TravelAssistantWidget() {
   useEffect(() => {
     if (!isOpen) {
       setIsProcessing(false);
+      setConnectionStatus("disconnected");
+      setIsAgentConnectionEnabled(false);
+      return undefined;
+    }
+
+    if (!isAgentConnectionEnabled) {
       setConnectionStatus("disconnected");
       return undefined;
     }
@@ -162,7 +170,7 @@ function TravelAssistantWidget() {
         socketRef.current = null;
       }
     };
-  }, [isOpen]);
+  }, [isAgentConnectionEnabled, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -206,6 +214,7 @@ function TravelAssistantWidget() {
     setMessages((current) => [...current, createChatMessage("user", displayContent)]);
     setDraft("");
     setIsProcessing(true);
+    setIsAgentConnectionEnabled(true);
 
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ message }));
@@ -216,29 +225,47 @@ function TravelAssistantWidget() {
     setIsOpen(true);
   }
 
-  function handleDealAlertChoice(enabled) {
+  async function handleDealAlertChoice(enabled) {
     if (!dealAlertRequest || isProcessing) {
       return;
     }
 
     const request = dealAlertRequest;
     const criteria = enabled ? dealAlertCriteria : {};
-    setDealAlertRequest(null);
-    sendAgentMessage(
-      [
-        "Store offline better-deal alert consent for this flight booking.",
-        `bookingId: ${request.bookingId}`,
-        `routeFrom: ${request.routeFrom}`,
-        `routeTo: ${request.routeTo}`,
-        `criteria: ${JSON.stringify(criteria)}`,
-        `minimumSavingsPercent: ${criteria.minimumSavingsPercent ?? ""}`,
-        `maxStops: ${criteria.maxStops ?? ""}`,
-        `timePreference: ${criteria.timePreference ?? ""}`,
-        `sameCabinOnly: ${criteria.sameCabinOnly ?? ""}`,
-        `enabled: ${enabled}`,
-      ].join("\n"),
-      enabled ? "Watch for better deals with these criteria." : "No, do not send better-deal alerts."
-    );
+    const userMessage = enabled
+      ? "Watch for better deals with these criteria."
+      : "No, do not send better-deal alerts.";
+
+    setMessages((current) => [...current, createChatMessage("user", userMessage)]);
+    setIsProcessing(true);
+
+    try {
+      await createDealAlertConsent({
+        bookingId: request.bookingId,
+        username: request.username,
+        routeFrom: request.routeFrom,
+        routeTo: request.routeTo,
+        criteria,
+        enabled
+      });
+      setDealAlertRequest(null);
+      setMessages((current) => [
+        ...current,
+        createChatMessage(
+          "assistant",
+          enabled
+            ? "Saved. I'll watch for better deals that match those criteria."
+            : "Okay, I won't send better-deal alerts for this booking."
+        )
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        createChatMessage("assistant", error.message || "I could not save that alert preference.")
+      ]);
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   function handleSubmit(event) {
