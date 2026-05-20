@@ -525,7 +525,7 @@ function App() {
         locations={locations}
         onSearch={handleSearch}
       />
-      <ChatWidget />
+      <TravelAssistantWidget />
       <SiteFooter />
     </div>
   );

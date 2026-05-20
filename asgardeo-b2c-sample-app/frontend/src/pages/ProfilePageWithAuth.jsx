@@ -321,14 +321,14 @@ export function ProfilePageWithAuth() {
                   <dt>Last name</dt>
                   <dd>{lastName || "Not available"}</dd>
                 </div>
-                <div>
+                {/* <div>
                   <dt>Email</dt>
                   <dd>{email || "Not available"}</dd>
                 </div>
                 <div>
                   <dt>Member since</dt>
                   <dd>{formatMemberSince(memberSince)}</dd>
-                </div>
+                </div> */}
               </dl>
             </div>
           )}

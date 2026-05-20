@@ -52,6 +52,6 @@ Routes are defined in `App.jsx`'s `<AppRoutes>`. All routes are accessible witho
 
 Search criteria flow through URL query params (`src/utils/routes.js` — `buildResultsPath` / `readCriteria`).
 
-### AI chat widget
+### AI assistant widget
 
-`ChatWidget` in `App.jsx` maintains a persistent WebSocket connection to `VITE_AGENT_CHAT_URL` with exponential backoff reconnection (700 ms → 4 s). Pages can trigger the deal-alert flow by dispatching a `wayfinder:deal-alert-consent` custom DOM event; the widget intercepts it, shows a criteria card, and sends the result to the agent.
+`TravelAssistantWidget` in `App.jsx` maintains a persistent WebSocket connection to `VITE_AGENT_CHAT_URL` with exponential backoff reconnection (700 ms → 4 s). Pages can trigger the deal-alert flow by dispatching a `wayfinder:deal-alert-consent` custom DOM event; the widget intercepts it, shows a criteria card, and sends the result to the agent.
