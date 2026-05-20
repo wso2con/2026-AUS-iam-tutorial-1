@@ -287,7 +287,7 @@ function SiteFooter({ authReady }) {
   );
 }
 
-function ChatWidget() {
+function TravelAssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [messages, setMessages] = useState([
@@ -994,7 +994,7 @@ function App({ authReady }) {
         locations={locations}
         onSearch={handleSearch}
       />
-      <ChatWidget />
+      <TravelAssistantWidget />
       <SiteFooter authReady={authReady} />
     </div>
   );
