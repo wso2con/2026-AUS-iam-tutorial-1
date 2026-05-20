@@ -963,7 +963,7 @@ async function processDealAlertWebhook(tools: ToolWithSchema[], payload: unknown
 }
 
 async function createAgent() {
-    logger.info("Starting Wayfinder AI agent with Asgardeo and LangChain");
+    logger.info("Starting Wayfinder Ambient AI agent with Asgardeo and LangChain");
 
     const asgardeoJavaScriptClient = new AsgardeoJavaScriptClient(asgardeoConfig);
     includeClientSecretInAgentAuthorizeRequest(asgardeoJavaScriptClient);
