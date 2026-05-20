@@ -307,30 +307,43 @@ Documentation: https://wso2.com/asgardeo/docs/guides/verifiable-credentials/issu
 
 TODO
 
-#### Create an Agent
+#### Register AI Agents
 
-- Navigate to Agents
-- Click on New Agent
-- Give a name to the agent `Wayfinder Assistant`
-- Check Allow users to log in to this agent
-- Give `http://localhost:8790` as callback URL
-- Select AI Agent Type: Interactive Agent
-- Click Create
-- Note the Agent ID and Credential
+This demo consists of two AI agents, an interactive AI agent that communicates with the end user and assists with flight bookings etc, and a background AI agent that acts on new flights being added to the database to provide better deal alerts to the subscribed consumers.
 
-Since the agent is created with `Allow users to log in to this agent` configuration, an application will be created as agent application.
+Follow these steps to register the AI agents in Asgardeo.
 
-- Navigate to Applications
-- You can see a `Wayfinder Assistant-<random value>` named application
+- On Asgardeo Console, Navigate to Agents.
+- Click on New Agent.
+- When registering the interactive AI agent,
+  - Give a name to the agent `Wayfinder Assistant`
+  - Tick **Allow users to log in to this agent**
+  - Select AI Agent Type as **Interactive Agent**
+  - Provide `http://localhost:8790` as callback URL
+- When registering the background AI agent,
+  - Give a name to the agent `Wayfinder Ambient Assistant`
+  - Tick **Allow users to log in to this agent**
+  - Select AI Agent Type as **Background Agent**
+  - Provide the CIBA configurations.
+- Click **Create**.
+- Note the Agent ID and Agent Secret, along with the credentials of the created associated application.
+
+Since both agents are created with `Allow users to log in to this agent` configuration, an application will be created for both AI agents as their agent applications.
+
+For the interactive agent,
+
+- Navigate to Applications.
+- You will see a `Wayfinder Assistant-<random value>` named application
 - Navigate to Protocol tab
 - Note the client ID and secret of the agent application
 
-Since we are using that agent as a background agent as well, need to enable CIBA
+For the background AI agent, enable the CIBA grant type in the associated application.
 
-- Enable CIBA under Allowed grant types
+- Navigate to Applications and select the associated application for the background agent.
+- Go to Protocol tab and enable CIBA under Allowed grant types
 - Set CIBA Authentication Request Expiry Time
 - Click SMS and Email as Allowed Notification Delivery Methods
-- Click on Update button
+- Click Update.
 
 ## Setup the applications
 
