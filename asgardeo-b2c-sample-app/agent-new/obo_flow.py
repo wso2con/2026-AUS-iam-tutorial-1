@@ -4,7 +4,7 @@
   OBO (On-Behalf-Of) Flow Handling
 
   Generates PKCE authorization URLs for user consent and exchanges
-  authorization codes for OBO tokens. Uses the Asgardeo SDK.
+  authorization codes for OBO tokens.
 """
 
 import json
@@ -13,6 +13,8 @@ import time
 import logging
 from html import escape
 
+import httpx
+from asgardeo import NetworkError, OAuthToken, TokenError
 from asgardeo_ai import AgentAuthManager
 from agent_auth import AgentAuth
 
@@ -27,6 +29,7 @@ def _required_env(key: str) -> str:
 
 # All WayFinder MCP scopes to request — Asgardeo grants only role-permitted ones
 OBO_SCOPES = _required_env("OBO_SCOPES").split(" ")
+OBO_RESOURCE = os.getenv("OBO_RESOURCE", os.getenv("AGENT_RESOURCE", "booking_api"))
 
 async def get_authorization_url(agent_auth: AgentAuth) -> tuple:
     """Generate PKCE authorization URL for OBO flow.
@@ -49,15 +52,46 @@ async def exchange_code(agent_auth: AgentAuth, code: str, code_verifier: str):
 
     Returns (obo_token, scopes, expires_at).
     """
-    async with AgentAuthManager(
-        agent_auth.asgardeo_config, agent_auth.agent_config
-    ) as auth_manager:
-        agent_token = await agent_auth.ensure_valid_token()
-        obo_token = await auth_manager.get_obo_token(
-            code,
-            agent_token=agent_token,
-            code_verifier=code_verifier,
+    agent_token = await agent_auth.ensure_valid_token()
+    config = agent_auth.asgardeo_config
+    data = {
+        "grant_type": "authorization_code",
+        "client_id": config.client_id,
+        "client_secret": config.client_secret,
+        "code": code,
+        "code_verifier": code_verifier,
+        "redirect_uri": config.redirect_uri,
+        "actor_token": agent_token.access_token,
+        "resource": OBO_RESOURCE,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{config.base_url.rstrip('/')}/oauth2/token",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data=data,
+            )
+            response.raise_for_status()
+            token_response = response.json()
+    except httpx.HTTPStatusError as e:
+        raise TokenError(
+            f"OBO token request failed: {e.response.status_code} {e.response.text}"
         )
+    except httpx.RequestError as e:
+        raise NetworkError(f"Network error during OBO token request: {e!s}")
+
+    try:
+        obo_token = OAuthToken(
+            access_token=token_response["access_token"],
+            id_token=token_response.get("id_token"),
+            refresh_token=token_response.get("refresh_token"),
+            expires_in=token_response.get("expires_in"),
+            token_type=token_response.get("token_type", "Bearer"),
+            scope=token_response.get("scope"),
+        )
+    except KeyError as e:
+        raise TokenError(f"Missing required field in OBO token response: {e!s}")
 
     scopes = []
     if hasattr(obo_token, "scope") and obo_token.scope:

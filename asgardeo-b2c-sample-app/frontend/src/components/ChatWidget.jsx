@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MessageCircle, Send, ShieldCheck, X } from "lucide-react";
-import { getAgentOboUrl, sendAgentChatMessage } from "../api";
+import { getAgentOboUrl, getAgentPendingMessage, sendAgentChatMessage } from "../api";
 import { useApiAuth } from "../api-queries";
 
 const DEFAULT_DEAL_ALERT_CRITERIA = {
@@ -85,8 +85,58 @@ export function ChatWidget() {
     };
   }, []);
 
-  async function sendAgentMessage(message, displayContent = message) {
-    setMessages((current) => [...current, createChatMessage("user", displayContent)]);
+  useEffect(() => {
+    async function handleOboMessage(event) {
+      if (event.data?.type === "obo_failed") {
+        setIsOpen(true);
+        setIsProcessing(false);
+        setMessages((current) => [
+          ...current,
+          createChatMessage("assistant", event.data.error || "Authorization failed.")
+        ]);
+        return;
+      }
+
+      if (event.data?.type !== "obo_success" || isChatUnavailable) {
+        return;
+      }
+
+      setIsOpen(true);
+      setIsProcessing(true);
+      setMessages((current) => [
+        ...current,
+        createChatMessage("assistant", "Authorization received. I'll finish that booking now.")
+      ]);
+
+      try {
+        const pendingResponse = await getAgentPendingMessage(auth);
+        const pendingMessage = pendingResponse.pending_message?.trim();
+
+        if (!pendingMessage) {
+          throw new Error("No pending booking request was found.");
+        }
+
+        await sendAgentMessage(pendingMessage, pendingMessage, { appendUserMessage: false });
+      } catch (error) {
+        setMessages((current) => [
+          ...current,
+          createChatMessage("assistant", error.message || "I could not continue the booking.")
+        ]);
+        setIsProcessing(false);
+      }
+    }
+
+    window.addEventListener("message", handleOboMessage);
+
+    return () => {
+      window.removeEventListener("message", handleOboMessage);
+    };
+  }, [auth, isChatUnavailable]);
+
+  async function sendAgentMessage(message, displayContent = message, options = {}) {
+    if (options.appendUserMessage !== false) {
+      setMessages((current) => [...current, createChatMessage("user", displayContent)]);
+    }
     setDraft("");
     setIsProcessing(true);
 
@@ -173,6 +223,15 @@ export function ChatWidget() {
     sendAgentMessage(message);
   }
 
+  function openAuthorizeWindow(event, authorizeUrl) {
+    event.preventDefault();
+    window.open(
+      authorizeUrl,
+      "wayfinder-obo-consent",
+      "popup=yes,width=720,height=760"
+    );
+  }
+
   return (
     <div className="chat-widget">
       {isOpen && (
@@ -205,10 +264,11 @@ export function ChatWidget() {
                     className="chat-authorization-link"
                     href={message.authorizeUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="opener"
+                    onClick={(event) => openAuthorizeWindow(event, message.authorizeUrl)}
                   >
                     <ShieldCheck size={16} />
-                    <span>Open consent page</span>
+                    <span>Authorize Booking</span>
                   </a>
                 )}
               </div>

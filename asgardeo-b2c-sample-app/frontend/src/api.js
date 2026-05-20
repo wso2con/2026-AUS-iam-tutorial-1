@@ -221,3 +221,7 @@ export async function sendAgentChatMessage(message, auth) {
 export async function getAgentOboUrl(auth) {
   return await requestAgentJson("/api/obo/url", { auth });
 }
+
+export async function getAgentPendingMessage(auth) {
+  return await requestAgentJson("/api/obo/pending", { auth });
+}

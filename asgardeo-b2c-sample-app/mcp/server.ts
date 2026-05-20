@@ -769,9 +769,9 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         "get_trips",
         "Get saved trip ideas from the travel API.",
         {},
-        async () => logToolOperation(requestLogger, "get_trips", {}, async () => (
+        withScopeCheck(async () => logToolOperation(requestLogger, "get_trips", {}, async () => (
             toToolContent(await api.get("/api/trips"))
-        )),
+        ))),
     );
 
     server.tool(
@@ -780,11 +780,11 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         {
             category: z.enum(["flights", "hotels"]).optional().describe("Optional location category."),
         },
-        async ({ category }) => logToolOperation(requestLogger, "get_locations", { category }, async () => {
+        withScopeCheck(async ({ category }) => logToolOperation(requestLogger, "get_locations", { category }, async () => {
             const query = category ? `?${new URLSearchParams({ category }).toString()}` : "";
 
             return toToolContent(await api.get(`/api/locations${query}`));
-        }),
+        })),
     );
 
     server.tool(
@@ -795,7 +795,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
             itemId: z.string().describe("Flight or hotel item ID to book."),
             travelers: z.number().int().optional().describe("Number of travelers."),
         },
-        async ({ type, itemId, travelers }) => logToolOperation(
+        withScopeCheck(async ({ type, itemId, travelers }) => logToolOperation(
             requestLogger,
             "create_booking",
             { type, itemId, travelers },
@@ -804,25 +804,25 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
                 itemId,
                 travelers: travelers ?? 1,
             })),
-        ),
+        )),
     );
 
     server.tool(
         "get_flight_bookings",
         "Get flight bookings for the current authenticated user.",
         {},
-        async () => logToolOperation(requestLogger, "get_flight_bookings", {}, async () => (
+        withScopeCheck(async () => logToolOperation(requestLogger, "get_flight_bookings", {}, async () => (
             toToolContent(await api.get("/api/bookings/flights"))
-        )),
+        ))),
     );
 
     server.tool(
         "get_profile",
         "Get the current authenticated user's profile from the travel API.",
         {},
-        async () => logToolOperation(requestLogger, "get_profile", {}, async () => (
+        withScopeCheck(async () => logToolOperation(requestLogger, "get_profile", {}, async () => (
             toToolContent(await api.get("/api/me"))
-        )),
+        ))),
     );
 
     server.tool(
@@ -847,7 +847,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
             sameCabinOnly: z.boolean().optional(),
             enabled: z.boolean().describe("true when the user agrees to alerts, false when they decline."),
         },
-        async ({
+        withScopeCheck(async ({
             bookingId,
             username,
             routeFrom,
@@ -881,7 +881,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
                     enabled,
                 },
             )),
-        ),
+        )),
     );
 
     server.tool(
@@ -890,7 +890,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         {
             matches: z.array(dealAlertMatchSchema).min(1).describe("Deal-alert consent matches produced by the flight insertion listener."),
         },
-        async ({ matches }) => logToolOperation(
+        withScopeCheck(async ({ matches }) => logToolOperation(
             requestLogger,
             "process_new_flight_deal_alerts",
             { matches },
@@ -904,7 +904,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
 
                 return toToolContent({ data: result });
             },
-        ),
+        )),
     );
 
     return server;
