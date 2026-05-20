@@ -1,0 +1,168 @@
+"""
+ Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com). All Rights Reserved.
+
+  OBO (On-Behalf-Of) Flow Handling
+
+  Generates PKCE authorization URLs for user consent and exchanges
+  authorization codes for OBO tokens.
+"""
+
+import json
+import os
+import time
+import logging
+from html import escape
+
+import httpx
+from asgardeo import NetworkError, OAuthToken, TokenError
+from asgardeo_ai import AgentAuthManager
+from agent_auth import AgentAuth
+
+logger = logging.getLogger(__name__)
+
+def _required_env(key: str) -> str:
+    """Read an environment variable or raise if missing/empty."""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"Missing required environment variable: {key}")
+    return value
+
+# All WayFinder MCP scopes to request — Asgardeo grants only role-permitted ones
+OBO_SCOPES = _required_env("OBO_SCOPES").split(" ")
+OBO_RESOURCE = os.getenv("OBO_RESOURCE", os.getenv("AGENT_RESOURCE", "booking_api"))
+
+async def get_authorization_url(agent_auth: AgentAuth) -> tuple:
+    """Generate PKCE authorization URL for OBO flow.
+
+    Returns (auth_url, state, code_verifier).
+    """
+    async with AgentAuthManager(
+        agent_auth.asgardeo_config, agent_auth.agent_config
+    ) as auth_manager:
+        auth_url, state, code_verifier = auth_manager.get_authorization_url_with_pkce(
+            OBO_SCOPES
+        )
+
+    logger.info("Generated PKCE authorization URL for OBO flow")
+    return auth_url, state, code_verifier
+
+
+async def exchange_code(agent_auth: AgentAuth, code: str, code_verifier: str):
+    """Exchange authorization code for OBO token.
+
+    Returns (obo_token, scopes, expires_at).
+    """
+    agent_token = await agent_auth.ensure_valid_token()
+    config = agent_auth.asgardeo_config
+    data = {
+        "grant_type": "authorization_code",
+        "client_id": config.client_id,
+        "client_secret": config.client_secret,
+        "code": code,
+        "code_verifier": code_verifier,
+        "redirect_uri": config.redirect_uri,
+        "actor_token": agent_token.access_token,
+        "resource": OBO_RESOURCE,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{config.base_url.rstrip('/')}/oauth2/token",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data=data,
+            )
+            response.raise_for_status()
+            token_response = response.json()
+    except httpx.HTTPStatusError as e:
+        raise TokenError(
+            f"OBO token request failed: {e.response.status_code} {e.response.text}"
+        )
+    except httpx.RequestError as e:
+        raise NetworkError(f"Network error during OBO token request: {e!s}")
+
+    try:
+        obo_token = OAuthToken(
+            access_token=token_response["access_token"],
+            id_token=token_response.get("id_token"),
+            refresh_token=token_response.get("refresh_token"),
+            expires_in=token_response.get("expires_in"),
+            token_type=token_response.get("token_type", "Bearer"),
+            scope=token_response.get("scope"),
+        )
+    except KeyError as e:
+        raise TokenError(f"Missing required field in OBO token response: {e!s}")
+
+    scopes = []
+    if hasattr(obo_token, "scope") and obo_token.scope:
+        scopes = obo_token.scope.split()
+
+    expires_at = time.time() + 3600
+    if hasattr(obo_token, "expires_in") and obo_token.expires_in:
+        expires_at = time.time() + obo_token.expires_in
+
+    logger.info(f"OBO token obtained (scopes: {scopes})")
+    return obo_token, scopes, expires_at
+
+
+def callback_html(success: bool, error: str = None) -> str:
+    """Generate HTML for the OBO callback popup page."""
+    if success:
+        return """<!DOCTYPE html>
+<html>
+<head><title>Authorization Successful</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; background: #f0fdf4; }
+  .card { text-align: center; padding: 2rem; }
+  .icon { font-size: 3rem; margin-bottom: 1rem; }
+  h2 { color: #166534; margin-bottom: 0.5rem; }
+  p { color: #6b7280; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">&#10003;</div>
+    <h2>Authorization Successful</h2>
+    <p>You can close this window. The assistant will now process your request.</p>
+  </div>
+  <script>
+    if (window.opener) {
+      window.opener.postMessage({ type: 'obo_success' }, '*');
+    }
+    setTimeout(() => window.close(), 2000);
+  </script>
+</body>
+</html>"""
+    else:
+        message = error or "Unknown error"
+        safe_error_html = escape(message)
+        safe_error_js = json.dumps(message)
+        return f"""<!DOCTYPE html>
+<html>
+<head><title>Authorization Failed</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; background: #fef2f2; }}
+  .card {{ text-align: center; padding: 2rem; }}
+  .icon {{ font-size: 3rem; margin-bottom: 1rem; }}
+  h2 {{ color: #991b1b; margin-bottom: 0.5rem; }}
+  p {{ color: #6b7280; }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">&#10007;</div>
+    <h2>Authorization Failed</h2>
+    <p>{safe_error_html}</p>
+    <p>You can close this window and try again.</p>
+  </div>
+  <script>
+    if (window.opener) {{
+      window.opener.postMessage({{ type: 'obo_failed', error: {safe_error_js} }}, '*');
+    }}
+  </script>
+</body>
+</html>"""

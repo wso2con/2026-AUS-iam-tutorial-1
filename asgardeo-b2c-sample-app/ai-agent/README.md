@@ -1,8 +1,8 @@
 # AI Agent
 
-This folder contains a WebSocket-based AI agent sample that demonstrates Asgardeo agent authentication with LangChain.
+This folder contains a Langchain AI agent that demonstrates Asgardeo agent authentication.
 
-The agent authenticates with Asgardeo using agent credentials, receives an agent access token, and uses that token to call a protected MCP server. The MCP tools are then exposed to a LangChain ReAct agent backed by Google Gemini, so clients can connect to the `/chat` WebSocket endpoint and let the agent call MCP tools on their behalf.
+The agent authenticates with Asgardeo using agent credentials, receives an agent access token, and uses that token to call a protected MCP server. The MCP tools are then exposed to a LangChain ReAct agent backed by a configured LLM, so clients can connect to the `/chat` WebSocket endpoint and let the agent call MCP tools on their behalf.
 
 ## What It Demonstrates
 
@@ -29,25 +29,9 @@ cp .env.example .env
 
 Then update the values in `.env` for your local setup.
 
-Environment variables:
-
-- `CLIENT_ID`: Client ID of the Asgardeo application used by the agent flow.
-- `ASGARDEO_BASE_URL`: Base URL of your Asgardeo organization.
-- `AGENT_SCOPES`: Space-separated scopes requested for the agent's own token. Defaults to `openid profile deal-alert-consents:write`.
-- `REDIRECT_URI`: Redirect URI configured for the Asgardeo application.
-- `OBO_REDIRECT_URI`: Redirect URI used when the agent asks the user to authorize an on-behalf-of action. Defaults to `REDIRECT_URI` when omitted.
-- `OBO_SCOPES`: Optional space-separated scopes requested for redirect-based on-behalf-of actions. Defaults to the scopes needed by the detected action.
-- `AGENT_ID`: Agent identifier issued by Asgardeo.
-- `AGENT_SECRET`: Agent secret issued by Asgardeo.
-- `GOOGLE_API_KEY`: API key used by the Gemini chat model.
-- `MODEL_NAME`: Optional Gemini model name. Defaults to `gemini-2.5-flash`.
-- `MCP_SERVER_URL`: Optional MCP server endpoint. Defaults to `http://localhost:8000/mcp`.
-- `AGENT_PORT`: Optional port for the WebSocket server. Defaults to `8790`.
-- `HOST`: Optional host for the WebSocket server. Defaults to `localhost`.
-
 ## Run Locally
 
-Start your MCP server first, then run the agent WebSocket server:
+Start your MCP server first, then run the AI agent:
 
 ```bash
 cd ai-agent

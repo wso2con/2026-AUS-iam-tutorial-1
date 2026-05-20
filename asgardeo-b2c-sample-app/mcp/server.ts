@@ -120,6 +120,30 @@ function getAuthorizationHeader(request: IncomingMessage): string | undefined {
     return Array.isArray(authorization) ? authorization[0] : authorization;
 }
 
+class InsufficientScopeError extends Error {
+    constructor() {
+        super("insufficient_scope");
+        this.name = "InsufficientScopeError";
+    }
+}
+
+function withScopeCheck<T extends Record<string, unknown>, R>(fn: (params: T) => Promise<R>) {
+    return async (params: T): Promise<R | { isError: true; content: [{ type: "text"; text: string }] }> => {
+        try {
+            return await fn(params);
+        } catch (error) {
+            if (error instanceof InsufficientScopeError) {
+                return {
+                    isError: true as const,
+                    content: [{ type: "text" as const, text: "insufficient_scope" }],
+                };
+            }
+
+            throw error;
+        }
+    };
+}
+
 function createApiClient(authorization?: string, requestLogger: Logger = logger) {
     async function requestApi(path: string, options: RequestInit = {}): Promise<JsonValue> {
         const startedAt = getStartTime();
@@ -160,6 +184,10 @@ function createApiClient(authorization?: string, requestLogger: Logger = logger)
                 statusCode: response.status,
                 durationMs: getDurationMs(startedAt),
             }, "API request failed");
+
+            if (response.status === 403) {
+                throw new InsufficientScopeError();
+            }
 
             throw new Error(`API request failed with ${response.status}: ${JSON.stringify(body)}`);
         }
@@ -440,28 +468,37 @@ async function invokeCiba({
 
 const dealAlertMatchSchema = z.object({
     consent: z.object({
+        id: z.string().optional(),
         bookingId: z.string(),
         username: z.string(),
         routeFrom: z.string(),
         routeTo: z.string(),
         criteria: z.record(z.string(), z.unknown()).optional(),
+        enabled: z.boolean().optional(),
+        createdAt: z.string().nullish(),
+        updatedAt: z.string().nullish(),
     }),
     currentPrice: z.number(),
-    currency: z.string().optional(),
-    travelers: z.number().int().optional(),
-    userId: z.string().optional(),
+    currentCabin: z.string().nullish(),
+    currentDates: z.string().nullish(),
+    currentDepartureTime: z.string().nullish(),
+    currency: z.string().nullish(),
+    travelers: z.number().int().nullish(),
+    userId: z.string().nullish(),
     newFlight: z.object({
         id: z.string(),
         from: z.string(),
         to: z.string(),
-        airline: z.string().optional(),
-        departureTime: z.string().optional(),
-        arrivalTime: z.string().optional(),
-        stops: z.number().int().optional(),
+        airline: z.string().nullish(),
+        departureTime: z.string().nullish(),
+        arrivalTime: z.string().nullish(),
+        duration: z.string().nullish(),
+        stops: z.number().int().nullish(),
         price: z.number(),
-        currency: z.string().optional(),
-        cabin: z.string().optional(),
-        dates: z.string().optional(),
+        currency: z.string().nullish(),
+        cabin: z.string().nullish(),
+        dates: z.string().nullish(),
+        tags: z.array(z.string()).optional(),
     }),
 });
 
@@ -692,7 +729,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
             from: z.string().optional().describe("Departure location, for example Colombo."),
             to: z.string().optional().describe("Arrival location, for example Singapore."),
         },
-        async ({ from, to }) => logToolOperation(requestLogger, "search_flights", { from, to }, async () => {
+        withScopeCheck(async ({ from, to }) => logToolOperation(requestLogger, "search_flights", { from, to }, async () => {
             const params = new URLSearchParams();
 
             if (from) {
@@ -707,7 +744,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
 
             return toToolContent(await api.get(`/api/flights${query ? `?${query}` : ""}`));
         }),
-    );
+    ));
 
     server.tool(
         "search_hotels",
@@ -715,7 +752,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         {
             location: z.string().optional().describe("Hotel location, for example Singapore."),
         },
-        async ({ location }) => logToolOperation(requestLogger, "search_hotels", { location }, async () => {
+        withScopeCheck(async ({ location }) => logToolOperation(requestLogger, "search_hotels", { location }, async () => {
             const params = new URLSearchParams();
 
             if (location) {
@@ -726,15 +763,15 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
 
             return toToolContent(await api.get(`/api/hotels${query ? `?${query}` : ""}`));
         }),
-    );
+    ));
 
     server.tool(
         "get_trips",
         "Get saved trip ideas from the travel API.",
         {},
-        async () => logToolOperation(requestLogger, "get_trips", {}, async () => (
+        withScopeCheck(async () => logToolOperation(requestLogger, "get_trips", {}, async () => (
             toToolContent(await api.get("/api/trips"))
-        )),
+        ))),
     );
 
     server.tool(
@@ -743,11 +780,11 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         {
             category: z.enum(["flights", "hotels"]).optional().describe("Optional location category."),
         },
-        async ({ category }) => logToolOperation(requestLogger, "get_locations", { category }, async () => {
+        withScopeCheck(async ({ category }) => logToolOperation(requestLogger, "get_locations", { category }, async () => {
             const query = category ? `?${new URLSearchParams({ category }).toString()}` : "";
 
             return toToolContent(await api.get(`/api/locations${query}`));
-        }),
+        })),
     );
 
     server.tool(
@@ -758,7 +795,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
             itemId: z.string().describe("Flight or hotel item ID to book."),
             travelers: z.number().int().optional().describe("Number of travelers."),
         },
-        async ({ type, itemId, travelers }) => logToolOperation(
+        withScopeCheck(async ({ type, itemId, travelers }) => logToolOperation(
             requestLogger,
             "create_booking",
             { type, itemId, travelers },
@@ -767,26 +804,26 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
                 itemId,
                 travelers: travelers ?? 1,
             })),
-        ),
+        )),
     );
 
     server.tool(
         "get_flight_bookings",
         "Get flight bookings for the current authenticated user.",
         {},
-        async () => logToolOperation(requestLogger, "get_flight_bookings", {}, async () => (
+        withScopeCheck(async () => logToolOperation(requestLogger, "get_flight_bookings", {}, async () => (
             toToolContent(await api.get("/api/bookings/flights"))
-        )),
+        ))),
     );
 
-    server.tool(
-        "get_profile",
-        "Get the current authenticated user's profile from the travel API.",
-        {},
-        async () => logToolOperation(requestLogger, "get_profile", {}, async () => (
-            toToolContent(await api.get("/api/me"))
-        )),
-    );
+    // server.tool(
+    //     "get_profile",
+    //     "Get the current authenticated user's profile from the travel API.",
+    //     {},
+    //     withScopeCheck(async () => logToolOperation(requestLogger, "get_profile", {}, async () => (
+    //         toToolContent(await api.get("/api/me"))
+    //     ))),
+    // );
 
     server.tool(
         "store_deal_alert_consent",
@@ -810,7 +847,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
             sameCabinOnly: z.boolean().optional(),
             enabled: z.boolean().describe("true when the user agrees to alerts, false when they decline."),
         },
-        async ({
+        withScopeCheck(async ({
             bookingId,
             username,
             routeFrom,
@@ -844,7 +881,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
                     enabled,
                 },
             )),
-        ),
+        )),
     );
 
     server.tool(
@@ -853,7 +890,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         {
             matches: z.array(dealAlertMatchSchema).min(1).describe("Deal-alert consent matches produced by the flight insertion listener."),
         },
-        async ({ matches }) => logToolOperation(
+        withScopeCheck(async ({ matches }) => logToolOperation(
             requestLogger,
             "process_new_flight_deal_alerts",
             { matches },
@@ -867,7 +904,7 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
 
                 return toToolContent({ data: result });
             },
-        ),
+        )),
     );
 
     return server;

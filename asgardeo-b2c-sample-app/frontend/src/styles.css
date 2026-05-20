@@ -2736,6 +2736,98 @@ h2 {
   font-style: italic;
 }
 
+.chat-message p {
+  margin: 0 0 0.5em;
+}
+
+.chat-message p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message ul,
+.chat-message ol {
+  margin: 0.25em 0 0.5em;
+  padding-left: 1.25em;
+}
+
+.chat-message li {
+  margin-bottom: 0.2em;
+}
+
+.chat-message strong {
+  font-weight: 700;
+}
+
+.chat-message em {
+  font-style: italic;
+}
+
+.chat-message code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.chat-message--user code {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-message pre {
+  margin: 0.4em 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+  font-size: 0.85em;
+}
+
+.chat-message pre code {
+  padding: 0;
+  background: none;
+}
+
+.chat-message h1,
+.chat-message h2,
+.chat-message h3 {
+  margin: 0.4em 0 0.2em;
+  font-size: 1em;
+  font-weight: 700;
+}
+
+.chat-message a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.chat-message table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 0.85em;
+}
+
+.chat-message th,
+.chat-message td {
+  border: 1px solid #d1d5db;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.chat-message th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+.chat-message--assistant table th {
+  background: #e8edf5;
+}
+
+.chat-message tr:nth-child(even) td {
+  background: #f9fafb;
+}
+
 .chat-authorization-link {
   display: inline-flex;
   gap: 8px;

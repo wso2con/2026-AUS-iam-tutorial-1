@@ -48,7 +48,7 @@ function SiteFooter() {
   );
 }
 
-function ChatWidget() {
+function TravelAssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [messages, setMessages] = useState([
