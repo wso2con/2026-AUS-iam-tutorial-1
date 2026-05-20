@@ -9,7 +9,7 @@ import "./styles.css";
 const clientId = import.meta.env.VITE_ASGARDEO_CLIENT_ID;
 const baseUrl = import.meta.env.VITE_ASGARDEO_BASE_URL;
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
-const requestedScopes = ["bookings:read", "bookings:write"];
+const requestedScopes = ["bookings:read", "bookings:write", "deal-alert-consents:write"];
 const asgardeoReady = Boolean(clientId && baseUrl);
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MessageCircle, Send, ShieldCheck, X } from "lucide-react";
-import { getAgentOboUrl, getAgentPendingMessage, sendAgentChatMessage } from "../api";
+import {
+  createDealAlertConsent,
+  getAgentOboUrl,
+  getAgentPendingMessage,
+  sendAgentChatMessage
+} from "../api";
 import { useApiAuth } from "../api-queries";
 
 const DEFAULT_DEAL_ALERT_CRITERIA = {
@@ -178,30 +183,47 @@ export function TravelAssistantWidget() {
     }
   }
 
-  function handleDealAlertChoice(enabled) {
+  async function handleDealAlertChoice(enabled) {
     if (!dealAlertRequest || isProcessing || isChatUnavailable) {
       return;
     }
 
     const request = dealAlertRequest;
     const criteria = enabled ? dealAlertCriteria : {};
-    setDealAlertRequest(null);
-    sendAgentMessage(
-      [
-        "Store offline better-deal alert consent for this flight booking.",
-        `bookingId: ${request.bookingId}`,
-        `username: ${request.username}`,
-        `routeFrom: ${request.routeFrom}`,
-        `routeTo: ${request.routeTo}`,
-        `criteria: ${JSON.stringify(criteria)}`,
-        `minimumSavingsPercent: ${criteria.minimumSavingsPercent ?? ""}`,
-        `maxStops: ${criteria.maxStops ?? ""}`,
-        `timePreference: ${criteria.timePreference ?? ""}`,
-        `sameCabinOnly: ${criteria.sameCabinOnly ?? ""}`,
-        `enabled: ${enabled}`,
-      ].join("\n"),
-      enabled ? "Watch for better deals with these criteria." : "No, do not send better-deal alerts."
-    );
+    const userMessage = enabled
+      ? "Watch for better deals with these criteria."
+      : "No, do not send better-deal alerts.";
+
+    setMessages((current) => [...current, createChatMessage("user", userMessage)]);
+    setIsProcessing(true);
+
+    try {
+      await createDealAlertConsent({
+        bookingId: request.bookingId,
+        username: request.username,
+        routeFrom: request.routeFrom,
+        routeTo: request.routeTo,
+        criteria,
+        enabled
+      }, auth);
+      setDealAlertRequest(null);
+      setMessages((current) => [
+        ...current,
+        createChatMessage(
+          "assistant",
+          enabled
+            ? "Saved. I'll watch for better deals that match those criteria."
+            : "Okay, I won't send better-deal alerts for this booking."
+        )
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        createChatMessage("assistant", error.message || "I could not save that alert preference.")
+      ]);
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   function updateDealAlertCriteria(updates) {
