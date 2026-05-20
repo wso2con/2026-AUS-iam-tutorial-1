@@ -258,79 +258,27 @@ def _extract_text(content) -> str:
         return "\n".join(parts)
     return str(content)
 
-
 def _check_tool_errors(response) -> tuple:
     """Check tool responses for auth-related errors.
 
-    Returns (error_type, error_message, tool_name) or (None, None, None).
+    Returns (error_type, error_message) or (None, None).
     """
-    tool_call_names = _collect_tool_call_names(response)
-    first_auth_error = (None, None, None)
-
     for message in response.get("messages", []):
         if hasattr(message, "type") and message.type == "tool":
             content = str(message.content)
-            error_type = _auth_error_from_text(content)
-            if not error_type:
-                continue
+            if "token_expired" in content:
+                return "token_expired", content
+            if "insufficient_scope" in content:
+                return "insufficient_scope", content
+    return None, None
 
-            tool_name = _get_tool_message_name(message, tool_call_names)
-            if _is_create_booking_tool(tool_name):
-                return error_type, content, tool_name
-            if not first_auth_error[0]:
-                first_auth_error = (error_type, content, tool_name)
+# def _auth_error_mentions_create_booking(message: str | None) -> bool:
+#     """Best-effort guard for raised tool exceptions that include tool context."""
+#     if not message:
+#         return False
 
-    return first_auth_error
-
-
-def _collect_tool_call_names(response) -> dict:
-    """Map tool call IDs to tool names from AI messages in a LangChain response."""
-    tool_call_names = {}
-
-    for message in response.get("messages", []):
-        for tool_call in getattr(message, "tool_calls", []) or []:
-            if isinstance(tool_call, dict):
-                tool_call_id = tool_call.get("id")
-                tool_name = tool_call.get("name")
-            else:
-                tool_call_id = getattr(tool_call, "id", None)
-                tool_name = getattr(tool_call, "name", None)
-
-            if tool_call_id and tool_name:
-                tool_call_names[tool_call_id] = tool_name
-
-    return tool_call_names
-
-
-def _get_tool_message_name(message, tool_call_names: dict) -> str | None:
-    """Return the MCP tool name for a LangChain ToolMessage when available."""
-    for attr in ("name", "tool_name"):
-        value = getattr(message, attr, None)
-        if value:
-            return str(value)
-
-    tool_call_id = getattr(message, "tool_call_id", None)
-    if tool_call_id:
-        return tool_call_names.get(tool_call_id)
-
-    return None
-
-
-def _is_create_booking_tool(tool_name: str | None) -> bool:
-    """Handle exact or MCP-server-prefixed create_booking tool names."""
-    return bool(tool_name) and (
-        tool_name == "create_booking"
-        or tool_name.endswith("_create_booking")
-    )
-
-
-def _auth_error_mentions_create_booking(message: str | None) -> bool:
-    """Best-effort guard for raised tool exceptions that include tool context."""
-    if not message:
-        return False
-
-    normalized = message.lower()
-    return "create_booking" in normalized or "create booking" in normalized
+#     normalized = message.lower()
+#     return "create_booking" in normalized or "create booking" in normalized
 
 
 def _iter_exception_messages(error: BaseException, seen: set[int] | None = None):
@@ -354,66 +302,66 @@ def _iter_exception_messages(error: BaseException, seen: set[int] | None = None)
             yield from _iter_exception_messages(nested, seen)
 
 
-def _auth_error_from_text(text: str) -> str | None:
-    """Return auth-related error type if present in text."""
-    normalized = text.lower()
-    if "token_expired" in normalized or "token expired" in normalized:
-        return "token_expired"
-    if "insufficient_scope" in normalized or "insufficient scope" in normalized:
-        return "insufficient_scope"
-    return None
+# def _auth_error_from_text(text: str) -> str | None:
+#     """Return auth-related error type if present in text."""
+#     normalized = text.lower()
+#     if "token_expired" in normalized or "token expired" in normalized:
+#         return "token_expired"
+#     if "insufficient_scope" in normalized or "insufficient scope" in normalized:
+#         return "insufficient_scope"
+#     return None
 
 
-def _check_exception_auth_error(error: BaseException) -> tuple:
-    """Check raised agent/tool exceptions for auth-related errors."""
-    for message in _iter_exception_messages(error):
-        error_type = _auth_error_from_text(message)
-        if error_type:
-            return error_type, message
-    return None, None
+# def _check_exception_auth_error(error: BaseException) -> tuple:
+#     """Check raised agent/tool exceptions for auth-related errors."""
+#     for message in _iter_exception_messages(error):
+#         error_type = _auth_error_from_text(message)
+#         if error_type:
+#             return error_type, message
+#     return None, None
 
 
-def _auth_error_response(
-    error_type: str,
-    session: UserSession,
-    user_message: str,
-    fallback_message: str | None = None,
-) -> JSONResponse:
-    """Build the same response for auth errors from tool messages or exceptions."""
-    if error_type == "token_expired":
-        session.pending_message = user_message
-        return JSONResponse({
-            "type": "obo_required",
-            "message": "Your authorization has expired. Please re-authorize to continue.",
-        })
+# def _auth_error_response(
+#     error_type: str,
+#     session: UserSession,
+#     user_message: str,
+#     fallback_message: str | None = None,
+# ) -> JSONResponse:
+#     """Build the same response for auth errors from tool messages or exceptions."""
+#     if error_type == "token_expired":
+#         session.pending_message = user_message
+#         return JSONResponse({
+#             "type": "obo_required",
+#             "message": "Your authorization has expired. Please re-authorize to continue.",
+#         })
 
-    if error_type == "insufficient_scope":
-        if not session.has_valid_obo and not session.obo_expired:
-            session.pending_message = user_message
-            return JSONResponse({
-                "type": "obo_required",
-                "message": fallback_message or (
-                    "I need your authorization to perform this action. "
-                    "Please click the Authorize button to grant me access."
-                ),
-            })
-        if session.obo_expired:
-            session.pending_message = user_message
-            return JSONResponse({
-                "type": "obo_required",
-                "message": "Your authorization has expired. Please re-authorize to continue.",
-            })
+#     if error_type == "insufficient_scope":
+#         if not session.has_valid_obo and not session.obo_expired:
+#             session.pending_message = user_message
+#             return JSONResponse({
+#                 "type": "obo_required",
+#                 "message": fallback_message or (
+#                     "I need your authorization to perform this action. "
+#                     "Please click the Authorize button to grant me access."
+#                 ),
+#             })
+#         if session.obo_expired:
+#             session.pending_message = user_message
+#             return JSONResponse({
+#                 "type": "obo_required",
+#                 "message": "Your authorization has expired. Please re-authorize to continue.",
+#             })
 
-        # return JSONResponse({
-        #     "type": "response",
-        #     "message": fallback_message or "You do not have permission to perform this action.",
-        #     "refresh_dashboard": False,
-        # })
+#         # return JSONResponse({
+#         #     "type": "response",
+#         #     "message": fallback_message or "You do not have permission to perform this action.",
+#         #     "refresh_dashboard": False,
+#         # })
 
-    return JSONResponse(
-        {"type": "error", "message": "Unknown authorization error."},
-        status_code=500,
-    )
+#     return JSONResponse(
+#         {"type": "error", "message": "Unknown authorization error."},
+#         status_code=500,
+#     )
 
 
 # ─── FastAPI App ─────────────────────────────────────────────────────────────
@@ -524,25 +472,43 @@ async def chat(request: Request, session: UserSession = Depends(get_session)):
         response = await agent.ainvoke({"messages": messages})
 
     except Exception as e:
-        error_type, error_message = _check_exception_auth_error(e)
-        if error_type and _auth_error_mentions_create_booking(error_message):
-            logger.warning(
-                "Agent invocation raised create_booking auth-related tool error: %s (%s)",
-                error_type,
-                error_message,
-            )
-            return _auth_error_response(error_type, session, user_message)
-        if error_type:
-            logger.warning(
-                "Agent invocation raised non-booking auth-related tool error: %s (%s)",
-                error_type,
-                error_message,
-            )
-            return JSONResponse({
-                "type": "response",
-                "message": "I do not have permission to perform that action.",
-                "refresh_dashboard": False,
-            })
+        # if error_type and _auth_error_mentions_create_booking(error_message):
+        #     logger.warning(
+        #         "Agent invocation raised create_booking auth-related tool error: %s (%s)",
+        #         error_type,
+        #         error_message,
+        #     )
+        #     return _auth_error_response(error_type, session, user_message)
+        # if error_type:
+        #     logger.warning(
+        #         "Agent invocation raised non-booking auth-related tool error: %s (%s)",
+        #         error_type,
+        #         error_message,
+        #     )
+        #     return JSONResponse({
+        #         "type": "response",
+        #         "message": "I do not have permission to perform that action.",
+        #         "refresh_dashboard": False,
+        #     })
+             # Check for auth-related errors in tool responses
+
+        error_message = str(e)
+        if "insufficient_scope" in error_message:
+            if not session.has_valid_obo and not session.obo_expired:
+                session.pending_message = user_message
+                return JSONResponse({
+                    "type": "obo_required",
+                    "message": (
+                        "I need your authorization to perform this action. "
+                        "Please click the Authorize Booking button to continue."
+                    ),
+                })
+            elif session.obo_expired:
+                session.pending_message = user_message
+                return JSONResponse({
+                    "type": "obo_required",
+                    "message": "Your authorization has expired. Please re-authorize to continue.",
+                })
 
         logger.exception("Agent invocation failed")
         # ExceptionGroup (TaskGroup) hides the real cause — surface the inner exceptions too.
@@ -557,18 +523,30 @@ async def chat(request: Request, session: UserSession = Depends(get_session)):
             status_code=500,
         )
 
-    # Check for auth-related errors in tool responses
-    error_type, _, tool_name = _check_tool_errors(response)
+     # Check for auth-related errors in tool responses
+    error_type, _ = _check_tool_errors(response)
     agent_reply = _extract_text(response["messages"][-1].content)
 
-    if error_type and _is_create_booking_tool(tool_name):
-        return _auth_error_response(error_type, session, user_message, agent_reply)
-    if error_type:
-        logger.info(
-            "Ignoring auth-related tool response from non-booking tool: %s (%s)",
-            tool_name or "unknown",
-            error_type,
-        )
+    if error_type == "token_expired":
+        session.pending_message = user_message
+        return JSONResponse({
+            "type": "obo_required",
+            "message": "Your authorization has expired. Please re-authorize to continue.",
+        })
+
+    if error_type == "insufficient_scope":
+        if not session.has_valid_obo and not session.obo_expired:
+            session.pending_message = user_message
+            return JSONResponse({
+                "type": "obo_required",
+                "message": agent_reply,
+            })
+        elif session.obo_expired:
+            session.pending_message = user_message
+            return JSONResponse({
+                "type": "obo_required",
+                "message": "Your authorization has expired. Please re-authorize to continue.",
+            })
 
     # Successful response — append and trim to the configured window.
     session.chat_history.append({"role": "user", "content": user_message})

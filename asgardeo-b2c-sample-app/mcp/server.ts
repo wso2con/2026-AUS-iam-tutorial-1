@@ -816,14 +816,14 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
         ))),
     );
 
-    server.tool(
-        "get_profile",
-        "Get the current authenticated user's profile from the travel API.",
-        {},
-        withScopeCheck(async () => logToolOperation(requestLogger, "get_profile", {}, async () => (
-            toToolContent(await api.get("/api/me"))
-        ))),
-    );
+    // server.tool(
+    //     "get_profile",
+    //     "Get the current authenticated user's profile from the travel API.",
+    //     {},
+    //     withScopeCheck(async () => logToolOperation(requestLogger, "get_profile", {}, async () => (
+    //         toToolContent(await api.get("/api/me"))
+    //     ))),
+    // );
 
     server.tool(
         "store_deal_alert_consent",
