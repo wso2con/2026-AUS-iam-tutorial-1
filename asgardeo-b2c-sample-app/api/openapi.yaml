@@ -572,6 +572,46 @@ paths:
   # ── Deal Alert Consents (protected) ───────────────────────────────────────
 
   /api/deal-alert-consents:
+    get:
+      tags:
+        - Deal Alerts
+      summary: List enabled better-deal alert consent candidates
+      description: |
+        Protected endpoint — requires a valid bearer token.
+
+        Used by the ambient agent to compare a newly added flight against existing better-deal alert consents.
+
+        **Required scope:** `deal-alert-consents:read`
+      security:
+        - AsgardeoOAuth2:
+            - deal-alert-consents:read
+      responses:
+        "200":
+          description: Enabled consent candidates with current booking context
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DealAlertConsentCandidate"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Insufficient scopes — `deal-alert-consents:read` required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
     post:
       tags:
         - Deal Alerts
@@ -1313,6 +1353,36 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    DealAlertConsentCandidate:
+      type: object
+      required:
+        - consent
+        - currentPrice
+      properties:
+        consent:
+          $ref: "#/components/schemas/DealAlertConsent"
+        currentPrice:
+          type: number
+          example: 420
+        currentCabin:
+          type: string
+          example: Economy
+        currentDates:
+          type: string
+          example: May 27
+        currentDepartureTime:
+          type: string
+          example: "10:30"
+        currency:
+          type: string
+          example: USD
+        travelers:
+          type: integer
+          example: 2
+        userId:
+          type: string
+          example: local-demo-user
 
     User:
       type: object

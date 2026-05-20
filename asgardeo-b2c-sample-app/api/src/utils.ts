@@ -279,25 +279,23 @@ export async function fetchAsgardeoMeProfile(accessToken: string) {
   return data;
 }
 
-export async function notifyAgentOfDealMatches(flight, matches) {
-  if (!matches.length) {
-    return;
-  }
-
-  const webhookUrl = process.env.AGENT_DEAL_ALERT_WEBHOOK_URL || "http://localhost:8790/deal-alerts";
+export async function notifyAgentOfNewFlight(flight: any) {
+  const webhookUrl = process.env.AGENT_NEW_FLIGHT_WEBHOOK_URL ||
+    process.env.AGENT_DEAL_ALERT_WEBHOOK_URL ||
+    "http://localhost:8790/deal-alerts";
 
   try {
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ flight, matches })
+      body: JSON.stringify({ flight })
     });
 
     if (!response.ok) {
       const message = await response.text().catch(() => "");
-      logger.warn({ statusCode: response.status, message }, "Deal alert webhook failed");
+      logger.warn({ statusCode: response.status, message }, "New-flight ambient webhook failed");
     }
   } catch (error) {
-    logger.warn({ err: error }, "Deal alert webhook could not be reached");
+    logger.warn({ err: error }, "New-flight ambient webhook could not be reached");
   }
 }

@@ -2,15 +2,14 @@ import { randomUUID } from "node:crypto";
 import {
   createFlightRecord,
   deleteFlightById,
-  findFlightById,
-  listMatchingDealAlertConsentsForFlight
+  findFlightById
 } from "../db.js";
 import {
   assertNonEmptyString,
   asyncHandler,
   getSearchParams,
   normalizeOptionalTags,
-  notifyAgentOfDealMatches,
+  notifyAgentOfNewFlight,
   readJsonBody,
   searchFlights,
   sendJson
@@ -94,13 +93,12 @@ async function handleFlightCreate(request) {
     dates,
     tags: normalizeOptionalTags(body.tags)
   });
-  const matches = listMatchingDealAlertConsentsForFlight(id);
 
-  await notifyAgentOfDealMatches(flight, matches);
+  await notifyAgentOfNewFlight(flight);
 
   return {
     statusCode: 201,
-    body: { data: flight, matchedDealAlerts: matches.length }
+    body: { data: flight }
   };
 }
 
