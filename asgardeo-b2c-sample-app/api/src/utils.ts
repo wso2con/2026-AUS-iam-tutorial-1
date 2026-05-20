@@ -14,7 +14,7 @@ export function getRoutePermissions(method, path) {
   }
 
   if (path === "/api/flights" || path.startsWith("/api/flights/")) {
-    return ["flights:write"];
+   return [];
   }
 
   if (path === "/api/me" || path === "/api/me/profile") {
