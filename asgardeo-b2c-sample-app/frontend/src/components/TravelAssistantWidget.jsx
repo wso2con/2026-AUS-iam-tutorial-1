@@ -21,7 +21,7 @@ function createChatMessage(role, content, options = {}) {
   };
 }
 
-export function ChatWidget() {
+export function TravelAssistantWidget() {
   const auth = useApiAuth();
   const isChatUnavailable = auth.isLoading || !auth.isSignedIn;
   const connectionStatus = useMemo(() => {

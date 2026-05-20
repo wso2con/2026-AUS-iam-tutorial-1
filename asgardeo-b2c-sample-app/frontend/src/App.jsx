@@ -14,7 +14,7 @@ import {
   ensureCDSProfile,
   initializeCDSFromCookie
 } from "./cds-api";
-import { ChatWidget } from "./components/ChatWidget";
+import { TravelAssistantWidget } from "./components/TravelAssistantWidget";
 import { BookingDetailsPageWithAuth } from "./pages/BookingDetailsPageWithAuth";
 import { BookingsPageWithAuth } from "./pages/BookingsPageWithAuth";
 import { BookingsUnavailable } from "./pages/BookingsUnavailable";
