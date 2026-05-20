@@ -1078,6 +1078,13 @@ h1 {
   padding: 20px;
 }
 
+.booking-detail-loading {
+  display: grid;
+  min-height: min(360px, calc(100vh - 300px));
+  place-items: center;
+  text-align: center;
+}
+
 .management-empty-state {
   display: grid;
   min-height: 240px;

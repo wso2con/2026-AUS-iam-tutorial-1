@@ -14,6 +14,7 @@ The AI agent connects to this server over Streamable HTTP at `/mcp`. The MCP ser
 - `get_flight_bookings`: Calls `GET /api/bookings/flights`.
 - `get_profile`: Calls `GET /api/me`.
 - `store_deal_alert_consent`: Calls `POST /api/deal-alert-consents`.
+- `list_deal_alert_consents`: Calls `GET /api/deal-alert-consents` so the ambient agent can compare new flights with enabled consent candidates.
 - `process_new_flight_deal_alerts`: Starts CIBA flows for matching deal-alert consents, books the new flight for the first approving user, cancels the old booking, and cancels the remaining pending polls.
 
 ## Local Configuration

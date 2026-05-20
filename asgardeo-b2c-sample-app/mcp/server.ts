@@ -485,6 +485,7 @@ const dealAlertMatchSchema = z.object({
     currency: z.string().nullish(),
     travelers: z.number().int().nullish(),
     userId: z.string().nullish(),
+    bindingMessage: z.string().nullish(),
     newFlight: z.object({
         id: z.string(),
         from: z.string(),
@@ -503,6 +504,23 @@ const dealAlertMatchSchema = z.object({
 });
 
 type DealAlertMatch = z.infer<typeof dealAlertMatchSchema>;
+
+function getBetterDealBindingMessage(match: DealAlertMatch) {
+    const { newFlight } = match;
+    const newPrice = Number(newFlight.price);
+    const fallbackMessage = `Approve booking the new ${newFlight.from} to ${newFlight.to} flight on ${newFlight.airline || "a partner airline"} departing at ${newFlight.departureTime} on ${newFlight.dates} at ${newFlight.currency || match.currency || "USD"} ${newPrice}. Your existing booking will be canceled.`;
+    const bindingMessage = typeof match.bindingMessage === "string"
+        ? match.bindingMessage.replace(/\s+/g, " ").trim()
+        : "";
+
+    if (!bindingMessage) {
+        return fallbackMessage;
+    }
+
+    return bindingMessage.toLowerCase().includes("canceled")
+        ? bindingMessage
+        : `${bindingMessage} Existing booking will be canceled.`;
+}
 
 async function reserveBetterDealForMatch({
     api,
@@ -540,7 +558,7 @@ async function reserveBetterDealForMatch({
     const ciba = await invokeCiba({
         authorization,
         loginHint: consent.username,
-        bindingMessage: `Approve booking the new ${newFlight.from} to ${newFlight.to} flight on ${newFlight.airline || "a partner airline"} departing at ${newFlight.departureTime} on ${newFlight.dates} at ${newFlight.currency || match.currency || "USD"} ${newPrice}. Your existing booking will be canceled.`,
+        bindingMessage: getBetterDealBindingMessage(match),
         requestLogger: dealLogger,
         signal,
     });
@@ -881,6 +899,18 @@ function createTravelMcpServer(authorization?: string, requestLogger: Logger = l
                     enabled,
                 },
             )),
+        )),
+    );
+
+    server.tool(
+        "list_deal_alert_consents",
+        "List enabled better-deal alert consents with current booking context for ambient flight matching.",
+        {},
+        withScopeCheck(async () => logToolOperation(
+            requestLogger,
+            "list_deal_alert_consents",
+            {},
+            async () => toToolContent(await api.get("/api/deal-alert-consents")),
         )),
     );
 
