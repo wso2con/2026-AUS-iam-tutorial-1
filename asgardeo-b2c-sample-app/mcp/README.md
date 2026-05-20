@@ -15,7 +15,6 @@ The AI agent connects to this server over Streamable HTTP at `/mcp`. The MCP ser
 - `get_profile`: Calls `GET /api/me`.
 - `store_deal_alert_consent`: Calls `POST /api/deal-alert-consents`.
 - `list_deal_alert_consents`: Calls `GET /api/deal-alert-consents` so the ambient agent can compare new flights with enabled consent candidates.
-- `process_new_flight_deal_alerts`: Starts CIBA flows for matching deal-alert consents, books the new flight for the first approving user, cancels the old booking, and cancels the remaining pending polls.
 
 ## Local Configuration
 
@@ -59,5 +58,3 @@ http://localhost:8000/health
 ## Authorization
 
 If a client sends an `Authorization` header to the MCP endpoint, the MCP server forwards that header to the REST API. This allows protected API endpoints to receive the same bearer token provided by the AI agent.
-
-The CIBA better-deal tool (`process_new_flight_deal_alerts`) requires `ASGARDEO_BASE_URL`, `CIBA_CLIENT_ID`, and `CIBA_CLIENT_SECRET`. It sends the backchannel request to `/oauth2/ciba`, polls `/oauth2/token` with `grant_type=urn:openid:params:grant-type:ciba`, and uses the user-approved access token to book the new flight and cancel the previous booking. Set `CIBA_NOTIFICATION_CHANNEL=email` to request email delivery for the approval link. For local debugging, set `CIBA_LOG_AUTH_URL=true` to log an `auth_url` returned by Asgardeo for manual approval.

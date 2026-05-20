@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { AsgardeoJavaScriptClient, type AgentConfig, type TokenResponse } from "@asgardeo/javascript";
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import dotenv from "dotenv";
+import { createProcessNewFlightDealAlertsTool } from "./ciba-tool.js";
 import { createBindingMessageAgent, createLlmModel, llmProvider } from "./llm.js";
 import { createLogger } from "./logger.js";
 import type { AgentRuntime, Flight } from "./models.js";
@@ -128,13 +129,18 @@ async function createAIAgentRuntime() {
         },
     });
     const tools = await client.getTools();
+    const nativeTools = [
+        createProcessNewFlightDealAlertsTool(agentToken.accessToken, logger),
+    ];
     const llmModel = createLlmModel();
     const bindingMessageAgent = createBindingMessageAgent(llmModel);
+    const allTools = [...tools, ...nativeTools];
 
     logger.info({
         llmProvider,
-        toolNames: tools.map((tool) => tool.name),
-    }, "Loaded MCP tools and ReAct agent for ambient processing");
+        mcpToolNames: tools.map((tool) => tool.name),
+        nativeToolNames: nativeTools.map((tool) => tool.name),
+    }, "Loaded MCP/native tools and ReAct agent for ambient processing");
 
     return {
         bindingMessageAgent,
@@ -142,7 +148,7 @@ async function createAIAgentRuntime() {
         llmModel,
         llmProvider,
         tokenExpiresAtMs,
-        tools,
+        tools: allTools,
     };
 }
 

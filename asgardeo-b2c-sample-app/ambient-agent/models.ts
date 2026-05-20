@@ -49,7 +49,7 @@ export type DealAlertMatch = DealAlertCandidate & {
 
 export type ToolWithSchema = {
     name?: string;
-    invoke?: (input: Record<string, unknown>) => Promise<unknown> | unknown;
+    invoke?: (input: any) => Promise<unknown> | unknown;
 };
 
 export type AgentRuntime = {

@@ -13,7 +13,7 @@ The agent authenticates with Asgardeo using agent credentials, receives an agent
 - Receiving new-flight events through a webhook
 - Comparing new flights against existing better-deal alert consents
 - Using a LangGraph ReAct agent to write smart CIBA approval messages
-- Starting CIBA approval flows for relevant users through the MCP server
+- Starting CIBA approval flows for relevant users through a native LangChain tool in the ambient agent
 
 ## Local Configuration
 
@@ -57,9 +57,9 @@ http://localhost:8790/health
 
 ## Better-Deal Alert Flow
 
-After a flight booking, the B2C frontend stores offline better-deal alert consent through the `store_deal_alert_consent` MCP tool.
+After a flight booking, the B2C frontend stores offline better-deal alert consent through `POST /api/deal-alert-consents`.
 
-When the API receives a new flight through `POST /api/flights`, it calls the ambient agent's `POST /deal-alerts` webhook with the new flight details. The agent fetches enabled deal-alert consent candidates, compares the new flight against their saved route and criteria, asks a LangGraph ReAct agent to write user-friendly CIBA binding messages, and invokes the `process_new_flight_deal_alerts` MCP tool for the relevant users. The first user who approves gets the new flight booked and their previous booking canceled; the remaining pending polls are canceled.
+When the API receives a new flight through `POST /api/flights`, it calls the ambient agent's `POST /deal-alerts` webhook with the new flight details. The agent fetches enabled deal-alert consent candidates from MCP, compares the new flight against their saved route and criteria, asks a LangGraph ReAct agent to write user-friendly CIBA binding messages, and invokes its native `process_new_flight_deal_alerts` LangChain tool for the relevant users. The first user who approves gets the new flight booked and their previous booking canceled; the remaining pending polls are canceled.
 
 ## Webhook Payload
 
@@ -96,6 +96,8 @@ The server accepts the event immediately:
 ## Acting as Itself
 
 The better-deal monitoring flow uses the agent's own Asgardeo agent token to call protected MCP tools such as `list_deal_alert_consents`. The agent application must be authorized to request the Wayfinder API scope used by this tool, for example `deal-alert-consents:read`; otherwise the REST API can reject the forwarded token because the token audience does not include the Wayfinder API.
+
+The native CIBA tool uses `CLIENT_ID` and `CLIENT_SECRET` for Asgardeo CIBA endpoint authorization, and passes the ambient agent access token as `actor_token` in the CIBA authorization request. Configure `ASGARDEO_BASE_URL`, `CIBA_SCOPE`, `CIBA_NOTIFICATION_CHANNEL`, `CIBA_POLL_INTERVAL_SECONDS`, and `CIBA_POLL_TIMEOUT_MS` in the ambient agent environment as needed. Set `CIBA_LOG_AUTH_URL=true` only for local debugging when you need to inspect an `auth_url` returned by Asgardeo.
 
 ## Notes
 
